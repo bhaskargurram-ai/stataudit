@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A second-opinion statistician for AI-generated analyses: trace the tests your code runs, check their assumptions on the real data, and see whether the conclusion holds."
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "Bhaskar Gurram", email = "bhaskargurram.g123@gmail.com" }]
+authors = [{ name = "Bhaskar Gurram", email = "gurrambhaskar.ai@gmail.com" }]
 requires-python = ">=3.10"
 keywords = ["statistics", "audit", "assumptions", "hypothesis-testing", "scipy", "reproducibility", "p-hacking"]
 classifiers = [
