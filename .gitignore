@@ -11,7 +11,7 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
-*.html
-!src/stataudit/reports/templates/*.html.j2
-report.*
+/*.html
+/report.*
+/examples/*.html
 .DS_Store

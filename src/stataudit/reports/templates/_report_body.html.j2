@@ -1,0 +1,92 @@
+{% set counts = report.counts() %}
+<div class="banner s-{{ report.status.value }}">
+  <strong>{{ icon[report.status] }} {{ headline[report.status] }}</strong>
+  <div class="muted">{{ report.results|length }} test(s) audited at α = {{ report.alpha }} —
+    {{ counts['holds'] }} hold, {{ counts['fragile'] }} fragile, {{ counts['does_not_hold'] }} do not hold{% if counts['not_audited'] %}, {{ counts['not_audited'] }} not audited{% endif %}.</div>
+</div>
+
+{% if report.results %}
+<div class="table-wrap"><table>
+  <thead><tr><th></th><th>Location</th><th>Test</th><th>Reported p</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for r in report.results %}
+    <tr><td>{{ icon[r.status] }}</td><td><a href="#t{{ loop.index }}"><code>{{ r.location }}</code></a></td>
+      <td>{{ r.test_label }}{% if r.target %} <span class="muted">({{ r.target }})</span>{% endif %}</td>
+      <td class="num">{{ r.reported_p|p }}</td><td><span class="pill s-{{ r.status.value }}">{{ r.status.label }}</span></td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}
+
+{% for r in report.results %}
+<section class="card" id="t{{ loop.index }}">
+  <header>
+    <h2>{{ icon[r.status] }} {{ loop.index }}. {{ r.test_label }}{% if r.target %} <span class="muted">— {{ r.target }}</span>{% endif %}</h2>
+    <span class="pill s-{{ r.status.value }}">{{ r.status.label }}</span>
+    <span class="loc">{{ r.location }}</span>
+  </header>
+  {% if r.call.site and r.call.site.code %}<pre><code>{{ r.call.site.code }}</code></pre>{% endif %}
+  <p class="verdict s-{{ r.status.value }}">{{ r.verdict }}</p>
+
+  {% if r.findings %}
+  <h3>Findings</h3>
+  <ul class="findings">
+    {% for f in r.findings %}
+    <li><span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span> {{ f.title }}
+      {% if f.detail %}<div class="detail">{{ f.detail }}</div>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% set alts = r.alternatives|selectattr('pvalue', 'ne', None)|list %}
+  {% if alts %}
+  <h3>Alternative analyses on the same data</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Analysis</th><th>Why</th><th>p-value</th><th>Significant?</th><th>Notes</th></tr></thead>
+    <tbody>
+    {% for a in alts %}
+      <tr><td>{{ a.name }}</td>
+        <td>{% if a.role != Role.RECOMMENDED %}<span class="muted">{{ a.role.value }}:</span> {% endif %}{{ a.reason }}</td>
+        <td class="num">{{ a.pvalue|p }}</td>
+        <td class="{{ 'yes' if a.significant == r.significant else 'no' }}">{{ 'yes' if a.significant else 'no' }}</td>
+        <td class="muted">{{ a.note }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  <div class="kv">
+    {% for k, v in r.effect_sizes.items() %}<span>{{ k }} <b>{{ v|num }}</b></span>{% endfor %}
+    {% for k, v in r.sample_sizes.items() %}<span>n({{ k }}) <b>{{ v }}</b></span>{% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+{% if report.script_findings %}
+<section class="card">
+  <h2>Script-level checks</h2>
+  <ul class="findings">
+  {% for f in report.script_findings %}
+    <li><span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span> {{ f.title }}
+      {% if f.code == 'script_error' %}<pre><code>{{ f.evidence.get('error', '') }}</code></pre>
+      {% elif f.detail %}<div class="detail">{{ f.detail }}</div>{% endif %}</li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if report.multiplicity %}
+<section class="card">
+  <h2>Multiple comparisons (Holm-Bonferroni)</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Location</th><th>Test</th><th>p</th><th>Holm p</th><th>Survives?</th></tr></thead>
+    <tbody>
+    {% for row in report.multiplicity|sort(attribute='pvalue') %}
+      <tr><td><code>{{ row.location }}</code></td><td>{{ row.test }} <span class="muted">{{ row.target }}</span></td>
+        <td class="num">{{ row.pvalue|p }}</td><td class="num">{{ row.holm_pvalue|p }}</td>
+        <td>{% if row.survives %}<span class="yes">yes</span>{% elif row.significant %}<span class="no">no</span>{% else %}<span class="muted">—</span>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}

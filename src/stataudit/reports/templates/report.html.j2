@@ -1,0 +1,24 @@
+{% if embedded %}
+{% include "_report_body.html.j2" %}
+{% else %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<style>
+{% include "_style.css" %}
+</style>
+</head>
+<body>
+<main>
+  <h1>stataudit report</h1>
+  {% if report.source %}<div class="muted">Source: <code>{{ report.source }}</code></div>{% endif %}
+  {% include "_report_body.html.j2" %}
+  <footer>stataudit checks assumptions and robustness of the tests it sees. It cannot know your study design,
+    and it is not a substitute for a statistician.</footer>
+</main>
+</body>
+</html>
+{% endif %}
