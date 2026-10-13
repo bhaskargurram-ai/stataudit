@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 import numpy as np
 import scipy.stats
@@ -223,3 +224,70 @@ class TestBuildRecord(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+FAKE_LINEAR_MODEL = '''
+import numpy as np
+
+
+class _Results:
+    def __init__(self, params, pvalues, bse):
+        self.params, self.pvalues, self.bse = params, pvalues, bse
+
+
+class RegressionModel:
+    def __init__(self, endog, exog):
+        self.endog = np.asarray(endog, dtype=float)
+        self.exog = np.asarray(exog, dtype=float)
+        self.exog_names = ["const"] + [f"x{i}" for i in range(1, self.exog.shape[1])]
+
+    def fit(self, cov_type="nonrobust"):
+        beta, *_ = np.linalg.lstsq(self.exog, self.endog, rcond=None)
+        return _Results(beta, np.full(beta.shape, 0.01), np.ones_like(beta))
+
+
+class OLS(RegressionModel):
+    pass
+'''
+
+
+class TestStatsmodelsHook(TempDirMixin, unittest.TestCase):
+    """Exercise the optional statsmodels path with a minimal stand-in package."""
+
+    def test_ols_fit_is_recorded(self):
+        import os
+
+        pkg = Path(self.tmp) / "fake" / "statsmodels"
+        (pkg / "regression").mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "regression" / "__init__.py").write_text("")
+        (pkg / "regression" / "linear_model.py").write_text(FAKE_LINEAR_MODEL)
+        script = write_script(
+            self.tmp,
+            """
+            import numpy as np
+            from statsmodels.regression.linear_model import OLS
+            r = np.random.default_rng(0)
+            x = r.uniform(0, 10, 60)
+            y = 1 + 0.2 * x + r.normal(size=60) * (0.2 + x)
+            res = OLS(y, np.column_stack([np.ones(60), x])).fit()
+            print(len(res.params))
+            """,
+        )
+        old = os.environ.get("PYTHONPATH")
+        os.environ["PYTHONPATH"] = str(Path(self.tmp) / "fake")
+        try:
+            tr = trace.trace_script(script)
+        finally:
+            if old is None:
+                os.environ.pop("PYTHONPATH", None)
+            else:
+                os.environ["PYTHONPATH"] = old
+        self.assertIsNone(tr.error, tr.stderr)
+        self.assertEqual(tr.stdout.strip(), "2")
+        self.assertEqual([r.func for r in tr.records], ["statsmodels_ols"])
+        rep = stataudit.audit_records(tr.records)
+        (res,) = rep.results
+        self.assertEqual(res.target, "slope of x1")
+        self.assertAlmostEqual(res.reported_p, 0.01)
+        self.assertIn("heteroskedasticity", {f.code for f in res.findings})

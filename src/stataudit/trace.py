@@ -377,17 +377,22 @@ def _patch_statsmodels() -> None:
 
     setattr(fit, ORIGINAL_ATTR, original)
     _originals["__statsmodels_ols_fit__"] = original
+    _originals["__statsmodels_ols_fit_own__"] = "fit" in cls.__dict__  # type: ignore[assignment]
     cls.fit = fit
 
 
 def _unpatch_statsmodels() -> None:
     original = _originals.pop("__statsmodels_ols_fit__", None)
+    own = _originals.pop("__statsmodels_ols_fit_own__", True)
     if original is None:
         return
     try:
         from statsmodels.regression import linear_model as lm  # type: ignore
 
-        lm.OLS.fit = original
+        if own:
+            lm.OLS.fit = original
+        else:  # fit was inherited from RegressionModel: remove our override
+            del lm.OLS.fit
     except Exception:  # pragma: no cover
         pass
 

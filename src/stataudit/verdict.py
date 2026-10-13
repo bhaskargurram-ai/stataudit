@@ -262,6 +262,20 @@ def overall_status(results: Iterable[AuditResult], script_level: Iterable[Findin
     return worst
 
 
+def _number_repeated_sites(results: list[AuditResult]) -> None:
+    """Disambiguate results that come from the same source line (loops)."""
+    groups: dict[tuple, list[AuditResult]] = defaultdict(list)
+    for r in results:
+        if r.call.site and r.call.site.lineno > 0:
+            groups[(r.call.site.filename, r.call.site.lineno, r.target)].append(r)
+    for rs in groups.values():
+        calls = sorted({r.call.index for r in rs})
+        if len(calls) > 1:
+            pos = {c: i + 1 for i, c in enumerate(calls)}
+            for r in rs:
+                r.occurrence = (pos[r.call.index], len(calls))
+
+
 def finalize(
     results: list[AuditResult],
     alpha: float,
@@ -270,6 +284,7 @@ def finalize(
     meta: dict | None = None,
 ) -> Report:
     """Apply multiplicity, compute statuses and verdicts, and build the :class:`Report`."""
+    _number_repeated_sites(results)
     table, mfinding = apply_multiplicity(results, alpha)
     for r in results:
         if r.status is not Status.NOT_AUDITED or r.reported_p is not None or r.findings:

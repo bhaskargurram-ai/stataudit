@@ -65,7 +65,9 @@ def render_text(
     def wrap(text: str, indent: str) -> list[str]:
         if ascii_only:
             text = text.replace("—", "-").replace("×", "x").replace("→", "->").replace("α", "alpha")
-        return textwrap.wrap(text, width=width, initial_indent=indent, subsequent_indent=indent) or [indent]
+        return textwrap.wrap(
+            text, width=width, initial_indent=indent, subsequent_indent=indent, break_on_hyphens=False
+        ) or [indent]
 
     lines: list[str] = []
     rule = "-" * width if ascii_only else "─" * width
@@ -128,7 +130,7 @@ def render_text(
         for row in sorted(report.multiplicity, key=lambda d: d["pvalue"]):
             mark = "survives" if row["survives"] else ("LOST" if row["significant"] else "")
             lines.append(
-                f"  {row['location']:<22} {row['test'][:34]:<34} p = {fmt_p(row['pvalue']):<8} "
+                f"  {row['location']:<28} {row['test'][:34]:<34} p = {fmt_p(row['pvalue']):<8} "
                 f"Holm p = {fmt_p(row['holm_pvalue']):<8} {mark}".rstrip()
             )
         lines.append("")

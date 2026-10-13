@@ -212,6 +212,8 @@ class AuditResult:
     verdict: str = ""
     in_family: bool = True
     data_key: str = ""
+    #: (k, n) when the same line ran n times (e.g. in a loop) and this is the k-th call.
+    occurrence: tuple[int, int] | None = None
 
     @property
     def significant(self) -> bool | None:
@@ -221,7 +223,10 @@ class AuditResult:
 
     @property
     def location(self) -> str:
-        return self.call.site.short if self.call.site else "<interactive>"
+        loc = self.call.site.short if self.call.site else "<interactive>"
+        if self.occurrence:
+            loc += f" [{self.occurrence[0]}/{self.occurrence[1]}]"
+        return loc
 
     def to_dict(self) -> dict[str, Any]:
         return {
