@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stataudit"
+version = "0.1.0"
+description = "A second-opinion statistician for AI-generated analyses: trace the tests your code runs, check their assumptions on the real data, and see whether the conclusion holds."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Bhaskar Gurram", email = "bhaskargurram.g123@gmail.com" }]
+requires-python = ">=3.10"
+keywords = ["statistics", "audit", "assumptions", "hypothesis-testing", "scipy", "reproducibility", "p-hacking"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "pandas>=1.5",
+    "click>=8.0",
+    "jinja2>=3.0",
+]
+
+[project.optional-dependencies]
+web = ["flask>=2.2"]
+mcp = ["mcp>=1.2"]
+dev = ["pytest>=7", "flask>=2.2", "mcp>=1.2"]
+
+[project.scripts]
+stataudit = "stataudit.cli:main"
+stataudit-mcp = "stataudit.mcp_server:main"
+
+[project.urls]
+Homepage = "https://github.com/bhaskargurram/stataudit"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+stataudit = ["reports/templates/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
