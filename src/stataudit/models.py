@@ -149,16 +149,23 @@ class CallSite:
     lineno: int
     function: str = ""
     code: str = ""
+    #: For notebooks: 1-based index of the code cell; ``lineno`` is then the line within that cell.
+    cell: int | None = None
 
     @property
     def short(self) -> str:
         import os
 
         base = os.path.basename(self.filename) or self.filename
+        if self.cell is not None:
+            return f"{base} cell {self.cell}, line {self.lineno}"
         return f"{base}:{self.lineno}" if self.lineno > 0 else base
 
     def to_dict(self) -> dict[str, Any]:
-        return {"filename": self.filename, "lineno": self.lineno, "function": self.function, "code": self.code}
+        d: dict[str, Any] = {"filename": self.filename, "lineno": self.lineno, "function": self.function, "code": self.code}
+        if self.cell is not None:
+            d["cell"] = self.cell
+        return d
 
 
 @dataclass
@@ -246,7 +253,35 @@ class AuditResult:
             "alternatives": [a.to_dict() for a in self.alternatives],
             "effect_sizes": _clean(self.effect_sizes),
             "sample_sizes": _clean(self.sample_sizes),
+            "inputs": input_summary(self.call),
         }
+
+
+def _summ(a: Any) -> dict[str, Any]:
+    arr = np.asarray(a, dtype=float)
+    out: dict[str, Any] = {"shape": list(arr.shape)}
+    fin = arr[np.isfinite(arr)]
+    out["n"] = int(fin.size)
+    out["n_missing"] = int(arr.size - fin.size)
+    if fin.size:
+        out.update(
+            mean=float(np.round(fin.mean(), 6)),
+            sd=float(np.round(fin.std(ddof=1), 6)) if fin.size > 1 else None,
+            min=float(np.round(fin.min(), 6)),
+            max=float(np.round(fin.max(), 6)),
+        )
+    return out
+
+
+def input_summary(call: "CallRecord") -> dict[str, Any]:
+    """Summary statistics (n, missing, mean, sd, min, max) of each data input; never the raw values."""
+    out: dict[str, Any] = {}
+    for k, v in call.inputs.items():
+        try:
+            out[k] = [_summ(x) for x in v] if isinstance(v, list) else _summ(v)
+        except Exception:  # pragma: no cover - defensive
+            out[k] = None
+    return _clean(out)
 
 
 @dataclass

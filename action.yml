@@ -1,0 +1,208 @@
+name: stataudit
+description: "Check AI-written statistics with evidence: re-run analyses, recompute reported p-values, lint analysis code."
+author: Bhaskar Gurram
+branding:
+  icon: bar-chart-2
+  color: blue
+
+# Security notes (see docs/SECURITY_MODEL.md):
+# * Every input reaches shell steps through `env:` and is quoted, never
+#   interpolated into the script text with ${{ }} (prevents script injection).
+# * stataudit is installed into its own virtualenv under $RUNNER_TEMP.
+# * `command: ci` executes the analyses listed under `run` in stataudit.toml:
+#   use it only in an unprivileged `pull_request` job (read-only token, no secrets).
+# * `command: comment` is meant for the privileged workflow_run workflow. It
+#   never checks out or runs PR code; it validates result.json and re-renders
+#   the card from it.
+# * `command: summary` renders the card from result.json into the job summary
+#   (no token needed, works for fork PRs).
+# * `command: agent-propose` holds the LLM key: use it only in a job that never
+#   installs or runs PR code. `command: agent-verify` runs PR code and
+#   LLM-written code: use it only in a job without secrets. The reusable
+#   .github/workflows/agent.yml already does this and is the recommended way.
+
+inputs:
+  command:
+    description: "One of: ci, summary, comment, agent-propose, agent-verify."
+    required: false
+    default: ci
+  base:
+    description: "ci: base ref/SHA (default: the pull request's base SHA). agent-propose: base SHA for the config."
+    required: false
+    default: ""
+  head:
+    description: "ci: head ref/SHA (default: the pull request's head SHA)."
+    required: false
+    default: ""
+  config:
+    description: "ci: path to a config file (default: stataudit.toml read from the base commit)."
+    required: false
+    default: ""
+  fail-on:
+    description: "ci: config | never | warn | fail"
+    required: false
+    default: config
+  output-dir:
+    description: "Directory for result.json, card.md, pr_number and head_sha (and candidates/)."
+    required: false
+    default: stataudit-out
+  result:
+    description: "summary / comment / agent-*: path to result.json."
+    required: false
+    default: stataudit-out/result.json
+  pr-number:
+    description: "comment: pull request number (validated as a positive integer)."
+    required: false
+    default: ""
+  expected-head-sha:
+    description: "comment: only comment if result.json and the PR head match this SHA (use github.event.workflow_run.head_sha)."
+    required: false
+    default: ""
+  labels:
+    description: "comment: 'true' to also set a `stataudit: pass|warnings|problems` label (needs pull-requests: write)."
+    required: false
+    default: "false"
+  github-token:
+    description: "comment: token with pull-requests: write."
+    required: false
+    default: ""
+  repo-dir:
+    description: "agent-propose: the PR checkout (read as data). agent-verify: the PR checkout (executed)."
+    required: false
+    default: "."
+  llm-provider:
+    description: "agent-propose: anthropic | openai."
+    required: false
+    default: ""
+  llm-model:
+    description: "agent-propose: model id (required for the agent; there is no default)."
+    required: false
+    default: ""
+  llm-base-url:
+    description: "agent-propose: optional API base URL."
+    required: false
+    default: ""
+  llm-reasoning-effort:
+    description: "agent-propose: optional reasoning_effort for OpenAI-compatible APIs (e.g. none)."
+    required: false
+    default: ""
+  llm-api-key:
+    description: "agent-propose: API key. Pass a secret; never use it in a job that runs PR code."
+    required: false
+    default: ""
+  stataudit-version:
+    description: "Advanced: pip requirement to install instead of this action's own source."
+    required: false
+    default: ""
+
+outputs:
+  status:
+    description: "ci: pass | warn | fail"
+    value: ${{ steps.ci.outputs.status }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install stataudit (isolated virtualenv)
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        SA_REQUIREMENT: ${{ inputs.stataudit-version }}
+      run: |
+        set -euo pipefail
+        venv="$RUNNER_TEMP/stataudit-venv"
+        if [ ! -x "$venv/bin/stataudit" ]; then
+          python3 -m venv "$venv"
+          "$venv/bin/python" -m pip install --quiet --disable-pip-version-check "${SA_REQUIREMENT:-$ACTION_PATH}"
+        fi
+        echo "STATAUDIT_BIN=$venv/bin/stataudit" >> "$GITHUB_ENV"
+
+    - name: Run stataudit ci (executes configured analyses; use without secrets)
+      id: ci
+      if: inputs.command == 'ci'
+      shell: bash
+      env:
+        SA_BASE: ${{ inputs.base || github.event.pull_request.base.sha }}
+        SA_HEAD: ${{ inputs.head || github.event.pull_request.head.sha }}
+        SA_CONFIG: ${{ inputs.config }}
+        SA_FAIL_ON: ${{ inputs.fail-on }}
+        OUT_DIR: ${{ inputs.output-dir }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        set -euo pipefail
+        args=(ci --repo . --out-dir "$OUT_DIR" --fail-on "$SA_FAIL_ON" -q)
+        [ -n "$SA_BASE" ] && args+=(--base "$SA_BASE")
+        [ -n "$SA_HEAD" ] && args+=(--head "$SA_HEAD")
+        [ -n "$SA_CONFIG" ] && args+=(--config "$SA_CONFIG")
+        if [[ "$PR_NUMBER" =~ ^[0-9]{1,10}$ ]]; then args+=(--pr "$PR_NUMBER"); fi
+        status=0
+        "$STATAUDIT_BIN" "${args[@]}" || status=$?
+        if [ -f "$OUT_DIR/result.json" ]; then
+          overall="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$OUT_DIR/result.json")"
+          if [[ "$overall" =~ ^[a-z]{1,10}$ ]]; then echo "status=$overall" >> "$GITHUB_OUTPUT"; fi
+          "$STATAUDIT_BIN" summary --json "$OUT_DIR/result.json" || true
+        fi
+        exit "$status"
+
+    - name: Write the card to the job summary
+      if: inputs.command == 'summary'
+      shell: bash
+      env:
+        SA_RESULT: ${{ inputs.result }}
+      run: |
+        set -euo pipefail
+        "$STATAUDIT_BIN" summary --json "$SA_RESULT"
+
+    - name: Post or update the card (never runs PR code)
+      if: inputs.command == 'comment'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        SA_RESULT: ${{ inputs.result }}
+        SA_PR: ${{ inputs.pr-number }}
+        SA_HEAD_SHA: ${{ inputs.expected-head-sha }}
+        SA_LABELS: ${{ inputs.labels }}
+      run: |
+        set -euo pipefail
+        if ! [[ "$SA_PR" =~ ^[0-9]{1,10}$ ]]; then
+          echo "::error::pr-number must be a positive integer"; exit 1
+        fi
+        args=(comment --json "$SA_RESULT" --pr "$SA_PR")
+        if [ -n "$SA_HEAD_SHA" ]; then
+          if ! [[ "$SA_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then echo "::error::invalid expected-head-sha"; exit 1; fi
+          args+=(--expect-head-sha "$SA_HEAD_SHA")
+        fi
+        if [ "$SA_LABELS" = "true" ]; then args+=(--labels); fi
+        "$STATAUDIT_BIN" "${args[@]}"
+
+    - name: Propose fixes (holds the LLM key; never runs PR code)
+      if: inputs.command == 'agent-propose'
+      shell: bash
+      env:
+        STATAUDIT_LLM_PROVIDER: ${{ inputs.llm-provider }}
+        STATAUDIT_LLM_MODEL: ${{ inputs.llm-model }}
+        STATAUDIT_LLM_BASE_URL: ${{ inputs.llm-base-url }}
+        STATAUDIT_LLM_REASONING_EFFORT: ${{ inputs.llm-reasoning-effort }}
+        STATAUDIT_LLM_API_KEY: ${{ inputs.llm-api-key }}
+        SA_BASE: ${{ inputs.base }}
+        SA_RESULT: ${{ inputs.result }}
+        SA_REPO: ${{ inputs.repo-dir }}
+        OUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        set -euo pipefail
+        args=(agent propose --result "$SA_RESULT" --repo-dir "$SA_REPO" --out-dir "$OUT_DIR/candidates")
+        [ -n "$SA_BASE" ] && args+=(--base "$SA_BASE")
+        "$STATAUDIT_BIN" "${args[@]}"
+
+    - name: Verify fixes (runs PR code; use without secrets)
+      if: inputs.command == 'agent-verify'
+      shell: bash
+      env:
+        SA_RESULT: ${{ inputs.result }}
+        SA_REPO: ${{ inputs.repo-dir }}
+        OUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        set -euo pipefail
+        "$STATAUDIT_BIN" agent verify --result "$SA_RESULT" --candidates "$OUT_DIR/candidates" --repo-dir "$SA_REPO" \
+          --json "$SA_RESULT" --out "$OUT_DIR/card.md"
+        "$STATAUDIT_BIN" summary --json "$SA_RESULT" || true

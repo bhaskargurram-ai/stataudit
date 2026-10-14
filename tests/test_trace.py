@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import time
 import unittest
 from pathlib import Path
 
@@ -13,6 +15,13 @@ import stataudit
 from stataudit import trace
 from stataudit._scipy import ORIGINAL_ATTR
 from stataudit.models import Status
+
+
+def _zombie(pid: int) -> bool:
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().split(")")[-1].split()[0] == "Z"
+    except OSError:
+        return True
 
 
 class TestTraceScript(TempDirMixin, unittest.TestCase):
@@ -108,6 +117,55 @@ class TestTraceScript(TempDirMixin, unittest.TestCase):
         tr = trace.trace_script(path, timeout=3)
         self.assertTrue(tr.timed_out)
         self.assertEqual(len(tr.records), 1)
+
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX")
+    def test_timeout_kills_child_processes_too(self):
+        pidfile = Path(self.tmp) / "child.pid"
+        path = write_script(
+            self.tmp,
+            f"""
+            import subprocess, sys, time
+            from scipy import stats
+            stats.ttest_ind([1.0, 2, 3], [4.0, 5, 6])
+            child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+            open({str(pidfile)!r}, "w").write(str(child.pid))
+            time.sleep(60)
+            """,
+        )
+        t0 = time.monotonic()
+        tr = trace.trace_script(path, timeout=3)
+        self.assertLess(time.monotonic() - t0, 20)
+        self.assertTrue(tr.timed_out)
+        self.assertIn("timed out", tr.error)
+        self.assertEqual(len(tr.records), 1)
+        pid = int(pidfile.read_text())
+        for _ in range(50):  # the grandchild was killed with the process group (not left running)
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            if _zombie(pid):
+                break
+            time.sleep(0.1)
+        else:
+            os.kill(pid, 9)
+            self.fail("the analysis' child process survived the timeout")
+
+    def test_non_utf8_output_does_not_break_tracing(self):
+        path = write_script(
+            self.tmp,
+            """
+            import sys
+            from scipy import stats
+            sys.stdout.buffer.write(b"\\xff\\xfe not utf-8\\n")
+            sys.stdout.flush()
+            stats.ttest_1samp([1.0, 2, 3, 4], 0.0)
+            """,
+        )
+        tr = trace.trace_script(path)
+        self.assertIsNone(tr.error, tr.stderr)
+        self.assertEqual(len(tr.records), 1)
+        self.assertIn("not utf-8", tr.stdout)
 
     def test_missing_script(self):
         with self.assertRaises(FileNotFoundError):

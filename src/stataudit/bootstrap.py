@@ -1,22 +1,64 @@
-"""Subprocess entry point used by :func:`stataudit.trace.trace_script`.
+"""Subprocess entry point used by :func:`stataudit.trace.trace_script` and notebook tracing.
 
 Usage (internal)::
 
     python -m stataudit.bootstrap OUT_DIR SCRIPT [ARGS...]
+    python -m stataudit.bootstrap OUT_DIR --notebook CELLS_JSON NOTEBOOK_PATH
 
 Installs the recording wrappers, then runs SCRIPT with :func:`runpy.run_path`
-as ``__main__``. Every recorded call is flushed to OUT_DIR immediately. If the
-script raises, the traceback is stored in ``OUT_DIR/status.json`` and the
+as ``__main__``, or executes the notebook's (already magic-stripped) code
+cells in order in one shared ``__main__`` namespace, as Jupyter's "Run all"
+does. Each cell is compiled under the file name ``<stataudit-cell-N>`` so that
+call sites map directly to ``cell N, line M``; execution stops at the first
+cell that raises. Every recorded call is flushed to OUT_DIR immediately. If
+the code raises, the traceback is stored in ``OUT_DIR/status.json`` and the
 calls recorded so far are kept.
 """
 
 from __future__ import annotations
 
+import builtins
 import json
+import linecache
 import os
 import runpy
 import sys
 import traceback
+import types
+
+CELL_FILENAME = "<stataudit-cell-{}>"
+
+
+def _display(*objs: object, **_: object) -> None:
+    """Stand-in for IPython's ``display`` when IPython is not installed."""
+    for o in objs:
+        print(o)
+
+
+def _run_notebook(cells_json: str, nb_path: str) -> None:
+    with open(cells_json, encoding="utf-8") as fh:
+        cells = json.load(fh)
+    nb_dir = os.path.dirname(os.path.abspath(nb_path))
+    sys.argv = [nb_path]
+    sys.path.insert(0, nb_dir)
+    if not hasattr(builtins, "display"):
+        try:
+            from IPython.display import display as ipy_display  # type: ignore
+
+            builtins.display = ipy_display  # type: ignore[attr-defined]
+        except Exception:
+            builtins.display = _display  # type: ignore[attr-defined]
+    main = types.ModuleType("__main__")
+    main.__dict__["__builtins__"] = builtins
+    sys.modules["__main__"] = main
+    for cell in cells:
+        n = int(cell["index"])
+        code = str(cell["code"])
+        fname = CELL_FILENAME.format(n)
+        lines = code.splitlines(keepends=True)
+        linecache.cache[fname] = (len(code), None, lines, fname)
+        compiled = compile(code, fname, "exec", dont_inherit=True)
+        exec(compiled, main.__dict__)  # noqa: S102 - running the user's own notebook is the point
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -24,7 +66,11 @@ def main(argv: list[str] | None = None) -> int:
     if len(argv) < 2:
         print("usage: python -m stataudit.bootstrap OUT_DIR SCRIPT [ARGS...]", file=sys.stderr)
         return 2
-    out_dir, script, *script_args = argv
+    out_dir, *rest = argv
+    notebook = rest[0] == "--notebook"
+    if notebook and len(rest) != 3:
+        print("usage: python -m stataudit.bootstrap OUT_DIR --notebook CELLS_JSON NOTEBOOK", file=sys.stderr)
+        return 2
     from stataudit import trace
 
     def sink(rec: "trace.CallRecord") -> None:  # type: ignore[name-defined]
@@ -37,12 +83,16 @@ def main(argv: list[str] | None = None) -> int:
     trace.add_sink(sink)
 
     status: dict[str, object] = {"error": None, "exit_code": 0}
-    script = os.path.abspath(script)
-    sys.argv = [script, *script_args]
-    sys.path.insert(0, os.path.dirname(script))
     code = 0
     try:
-        runpy.run_path(script, run_name="__main__")
+        if notebook:
+            _run_notebook(rest[1], rest[2])
+        else:
+            script, *script_args = rest
+            script = os.path.abspath(script)
+            sys.argv = [script, *script_args]
+            sys.path.insert(0, os.path.dirname(script))
+            runpy.run_path(script, run_name="__main__")
     except SystemExit as exc:
         c = exc.code
         code = c if isinstance(c, int) else (0 if c is None else 1)

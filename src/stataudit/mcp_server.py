@@ -9,6 +9,11 @@ Tools
     Audit a test on arrays supplied as JSON, e.g.
     ``{"a": [...], "b": [...]}`` for ``ttest_ind`` or
     ``{"observed": [[...], [...]]}`` for ``chi2_contingency``.
+``check_report(text, path, alpha)``
+    Recompute the p-values of APA-style results (``t(28) = 2.20, p = .036``) in
+    the given text, or in a local .md/.txt/.html/.pdf file. Executes nothing.
+``lint_file(path)``
+    Static checks of a local .py or .ipynb analysis (no execution).
 
 Inputs are treated purely as data. Array sizes are capped. The tool functions
 are plain Python functions (``audit_script_tool`` / ``audit_test_tool``) so they
@@ -34,6 +39,8 @@ __all__ = [
     "SCRIPT_TIMEOUT",
     "audit_script_tool",
     "audit_test_tool",
+    "check_report_tool",
+    "lint_file_tool",
     "build_server",
     "main",
 ]
@@ -148,14 +155,50 @@ def audit_script_tool(path: str, alpha: float = 0.05) -> str:
     """Run a local ``.py`` analysis script under the tracer and return the Markdown report."""
     alpha = _validate_alpha(alpha)
     p = Path(os.path.expanduser(str(path))).resolve()
-    if p.suffix != ".py":
-        raise ValueError("path must point to a .py file")
+    if p.suffix.lower() not in (".py", ".ipynb"):
+        raise ValueError("path must point to a .py file or an .ipynb notebook")
     if not p.is_file():
         raise ValueError(f"no such file: {p}")
     if p.stat().st_size > MAX_SCRIPT_BYTES:
         raise ValueError("script is too large")
     report = audit_script(p, alpha=alpha, timeout=SCRIPT_TIMEOUT)
     return report.to_markdown()
+
+
+MAX_TEXT_CHARS = 2_000_000
+REPORT_SUFFIXES = (".md", ".markdown", ".txt", ".html", ".htm", ".rst", ".pdf")
+
+
+def _local_file(path: str, suffixes: tuple[str, ...]) -> Path:
+    p = Path(os.path.expanduser(str(path))).resolve()
+    if p.suffix.lower() not in suffixes:
+        raise ValueError(f"path must end with one of {', '.join(suffixes)}")
+    if not p.is_file():
+        raise ValueError(f"no such file: {p}")
+    if p.stat().st_size > MAX_SCRIPT_BYTES * 10:
+        raise ValueError("file is too large")
+    return p
+
+
+def check_report_tool(text: str = "", path: str = "", alpha: float = 0.05) -> str:
+    """Recompute reported p-values in ``text`` or in the file at ``path``; returns a Markdown report."""
+    from .reportcheck import check_file, check_text
+
+    alpha = _validate_alpha(alpha)
+    if bool(text) == bool(path):
+        raise ValueError("give exactly one of text or path")
+    if text:
+        if not isinstance(text, str) or len(text) > MAX_TEXT_CHARS:
+            raise ValueError(f"text must be a string of at most {MAX_TEXT_CHARS} characters")
+        return check_text(text, alpha=alpha, source="<text>").to_markdown()
+    return check_file(_local_file(path, REPORT_SUFFIXES), alpha=alpha).to_markdown()
+
+
+def lint_file_tool(path: str) -> str:
+    """Statically lint a local .py or .ipynb analysis; returns a Markdown report. Executes nothing."""
+    from .lint import lint_file
+
+    return lint_file(_local_file(path, (".py", ".ipynb"))).to_markdown()
 
 
 def build_server() -> Any:
@@ -175,7 +218,7 @@ def build_server() -> Any:
 
     @server.tool()
     def audit_script(path: str, alpha: float = 0.05) -> str:
-        """Run a local Python analysis script under stataudit's tracer and return a Markdown audit report.
+        """Run a local Python analysis script (or .ipynb notebook) under stataudit's tracer; return a Markdown audit report.
 
         The script is executed in a subprocess with a timeout. Every scipy.stats test it performs is
         recorded and audited for assumption violations, outliers, multiplicity and robustness.
@@ -193,6 +236,27 @@ def build_server() -> Any:
         {"observed": [[..], [..]]} for chi2_contingency, {"a": [..], "popmean": 0} for ttest_1samp.
         """
         return audit_test_tool(test_name, data_json, alpha)
+
+    @server.tool()
+    def check_report(text: str = "", path: str = "", alpha: float = 0.05) -> str:
+        """Recompute the p-values of APA-style results in a report and flag inconsistent ones (statcheck-style).
+
+        Give either `text` (the report text) or `path` (a local .md/.txt/.html/.pdf file). Recognises
+        t(df) = x, F(df1, df2) = x, r(df) = x, chi2(df) = x, z = x and Q(df) = x followed by p = / < / > or ns,
+        allows for rounding, and flags inconsistencies, gross inconsistencies (significance flips at alpha)
+        and impossible values. Nothing is executed.
+        """
+        return check_report_tool(text, path, alpha)
+
+    @server.tool()
+    def lint_file(path: str) -> str:
+        """Statically check a local .py or .ipynb analysis for statistical smells (no execution, no data).
+
+        Rules: uncorrected multiple tests, Student's t-test without a variance check, Pearson without a
+        plot/outlier check, chi-square with small expected counts, test shopping, p < 0.05 selection across
+        many tests, normality pre-testing. Each finding has a rule id, explanation and suggested fix.
+        """
+        return lint_file_tool(path)
 
     return server
 

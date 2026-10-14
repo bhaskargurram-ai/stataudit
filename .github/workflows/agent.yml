@@ -1,0 +1,340 @@
+# stataudit reusable workflow: verified fixes by an LLM agent (EXPERIMENTAL, opt-in).
+#
+# Call it from a workflow triggered by `workflow_run` of the check workflow
+# (see `stataudit init --agent` or examples/workflows/stataudit-agent.yml).
+# When the check found an analysis whose conclusion is fragile or does not
+# hold, an LLM proposes a corrected analysis; stataudit then re-runs it and
+# accepts it only if the audit improves.
+#
+# Three trust zones, one job each (separate jobs run on separate VMs, so PR
+# code in `verify` cannot read the key from `propose`'s memory or disk):
+#
+#   gate     no PR code, no key. Reads the check artifact and the GitHub API
+#            and decides whether the agent should run (see `run-for`).
+#   propose  holds the LLM key. Checks the PR out as DATA only: never installs,
+#            imports or executes it. The model only gets read-only tools and
+#            its only output is a schema-validated corrected file.
+#   verify   runs the original and the candidate analyses (PR code + LLM-written
+#            code). No secrets are referenced, the token is read-only, no caches.
+#
+# The caller posts the card with comment.yml, passing the gate's `pr-number`
+# output (trusted) and this run's id (see examples/workflows/stataudit-agent.yml).
+name: stataudit agent
+
+on:
+  workflow_call:
+    inputs:
+      stataudit-ref:
+        description: Tag or commit SHA of stataudit to install (keep it equal to the @ref of this workflow).
+        type: string
+        default: v1.0.0
+      stataudit-repository:
+        description: Repository stataudit is installed from.
+        type: string
+        default: bhaskargurram-ai/stataudit
+      python-version:
+        type: string
+        default: "3.12"
+      install-command:
+        description: Installs what the analyses import, in the verify job only (runs PR code there, never in propose).
+        type: string
+        default: ""
+      llm-provider:
+        description: "anthropic | openai (any OpenAI-compatible endpoint)"
+        type: string
+        default: ""
+      llm-model:
+        description: Model id (required; there is no default model).
+        type: string
+        default: ""
+      llm-base-url:
+        description: Optional API base URL.
+        type: string
+        default: ""
+      llm-reasoning-effort:
+        description: >-
+          Optional, OpenAI-compatible only: sent as reasoning_effort. GPT-6 Luna needs "none" to call
+          tools through Chat Completions.
+        type: string
+        default: ""
+      run-for:
+        description: >-
+          "trusted" (default): only PRs by OWNER/MEMBER/COLLABORATOR, or labelled `stataudit:agent`.
+          "everyone": any PR (spends API credits on any fork PR).
+        type: string
+        default: trusted
+      label:
+        description: Label that opts a PR in when run-for is "trusted".
+        type: string
+        default: "stataudit:agent"
+      timeout-minutes:
+        description: Timeout of the verify job, which re-runs every analysis and candidate.
+        type: number
+        default: 30
+    secrets:
+      llm-api-key:
+        description: API key for the LLM provider. Only the propose job sees it.
+        required: false
+    outputs:
+      pr-number:
+        description: PR number determined by the gate job from the API (trusted).
+        value: ${{ jobs.gate.outputs.pr-number }}
+      verified:
+        description: "'true' when the verify job uploaded a `stataudit-result` artifact in this run."
+        value: ${{ jobs.verify.outputs.done }}
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read          # download the check artifact of the triggering run
+      pull-requests: read    # PR head, base, labels, author association
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      pr-number: ${{ steps.decide.outputs.pr-number }}
+      head-sha: ${{ steps.decide.outputs.head-sha }}
+      base-sha: ${{ steps.decide.outputs.base-sha }}
+    steps:
+      - name: Find the check artifact
+        id: art
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          n="$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts?name=stataudit-result" --jq '.total_count')"
+          if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -gt 0 ]; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Download the check artifact
+        if: steps.art.outputs.found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: stataudit-result
+          path: ${{ runner.temp }}/check
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Decide whether the agent runs
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ART: ${{ runner.temp }}/check
+          FOUND: ${{ steps.art.outputs.found }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HAS_KEY: ${{ secrets.llm-api-key != '' }}
+          HAS_MODEL: ${{ inputs.llm-model != '' }}
+          RUN_FOR: ${{ inputs.run-for }}
+          LABEL: ${{ inputs.label }}
+        run: |
+          set -euo pipefail
+          skip() { echo "stataudit agent: skipped ($1)" | tee -a "$GITHUB_STEP_SUMMARY"; echo "::notice title=stataudit agent::skipped: $1"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          [ "$HAS_KEY" = "true" ] || skip "no llm-api-key secret configured"
+          [ "$HAS_MODEL" = "true" ] || skip "no llm-model configured"
+          if [ "$FOUND" != "true" ] || [ ! -f "$ART/result.json" ]; then skip "the check run produced no result"; fi
+          [ "$(stat -c %s "$ART/result.json")" -le 8000000 ] || skip "result.json is too large"
+          pr="$(head -c 20 "$ART/pr_number" 2>/dev/null | tr -d '[:space:]' || true)"
+          [[ "$pr" =~ ^[0-9]{1,10}$ ]] || skip "the artifact has no valid PR number"
+          # Trusted data from here on: the API, checked against the triggering run's commit.
+          gh api "repos/$REPO/pulls/$pr" > "$RUNNER_TEMP/pr.json"
+          head_sha="$(jq -r '.head.sha' "$RUNNER_TEMP/pr.json")"
+          base_sha="$(jq -r '.base.sha' "$RUNNER_TEMP/pr.json")"
+          state="$(jq -r '.state' "$RUNNER_TEMP/pr.json")"
+          assoc="$(jq -r '.author_association' "$RUNNER_TEMP/pr.json")"
+          labelled="$(jq -r --arg l "$LABEL" '[.labels[].name] | index($l) != null' "$RUNNER_TEMP/pr.json")"
+          [ "$head_sha" = "$RUN_HEAD_SHA" ] || skip "PR #$pr is not at the checked commit (updated, or the artifact names another PR)"
+          [ "$state" = "open" ] || skip "PR #$pr is not open"
+          [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]] || skip "unexpected base SHA"
+          need="$(python3 -I -c '
+          import json, sys
+          try:
+              runs = json.load(open(sys.argv[1], encoding="utf-8")).get("runs") or []
+          except Exception:
+              runs = []
+          bad = [r for r in runs if isinstance(r, dict) and r.get("status") in ("fragile", "does_not_hold")]
+          print("needed" if bad else "no-analysis-needs-a-fix")
+          ' "$ART/result.json")"
+          [ "$need" = "needed" ] || skip "$need"
+          case "$assoc" in OWNER|MEMBER|COLLABORATOR) trusted=true ;; *) trusted=false ;; esac
+          if [ "$RUN_FOR" != "everyone" ] && [ "$trusted" != "true" ] && [ "$labelled" != "true" ]; then
+            skip "author is $assoc; a maintainer can add the '$LABEL' label to opt this PR in"
+          fi
+          {
+            echo "run=true"
+            echo "pr-number=$pr"
+            echo "head-sha=$head_sha"
+            echo "base-sha=$base_sha"
+          } >> "$GITHUB_OUTPUT"
+          echo "stataudit agent: running for PR #$pr at ${head_sha:0:12}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Hand the check result to the next jobs
+        if: steps.decide.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stataudit-check
+          path: ${{ runner.temp }}/check/result.json
+          retention-days: 1
+
+  propose:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      has-candidates: ${{ steps.propose.outputs.has-candidates }}
+    steps:
+      # DATA ONLY: nothing in this checkout is installed, imported or executed.
+      # It lives in pr/ and every output is written outside it, so files or
+      # symlinks in the PR cannot redirect stataudit's writes.
+      - name: Check out the pull request as data
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.head-sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out stataudit (trusted tool source)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.stataudit-repository }}
+          ref: ${{ inputs.stataudit-ref }}
+          path: .stataudit-tool
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install stataudit (isolated virtualenv; never the PR)
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/stataudit-venv"
+          "$RUNNER_TEMP/stataudit-venv/bin/python" -m pip install --quiet --disable-pip-version-check ./.stataudit-tool
+          echo "STATAUDIT_BIN=$RUNNER_TEMP/stataudit-venv/bin/stataudit" >> "$GITHUB_ENV"
+          echo "SA_OUT=$RUNNER_TEMP/stataudit-out" >> "$GITHUB_ENV"
+
+      - name: Download the check result
+        uses: actions/download-artifact@v4
+        with:
+          name: stataudit-check
+          path: ${{ runner.temp }}/stataudit-out
+
+      - name: Propose fixes (LLM; read-only tools; runs no PR code)
+        id: propose
+        env:
+          STATAUDIT_LLM_PROVIDER: ${{ inputs.llm-provider }}
+          STATAUDIT_LLM_MODEL: ${{ inputs.llm-model }}
+          STATAUDIT_LLM_BASE_URL: ${{ inputs.llm-base-url }}
+          STATAUDIT_LLM_REASONING_EFFORT: ${{ inputs.llm-reasoning-effort }}
+          STATAUDIT_LLM_API_KEY: ${{ secrets.llm-api-key }}
+          BASE_SHA: ${{ needs.gate.outputs.base-sha }}
+        run: |
+          set -euo pipefail
+          "$STATAUDIT_BIN" agent propose --result "$SA_OUT/result.json" --repo-dir pr --base "$BASE_SHA" \
+            --out-dir "$SA_OUT/candidates"
+          if [ -f "$SA_OUT/candidates/proposals.json" ]; then echo "has-candidates=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Upload candidates
+        if: steps.propose.outputs.has-candidates == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stataudit-candidates
+          path: ${{ runner.temp }}/stataudit-out/candidates
+          retention-days: 7
+
+  verify:
+    needs: [gate, propose]
+    if: needs.gate.outputs.run == 'true' && needs.propose.outputs.has-candidates == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    # No secrets are referenced in this job, the token is read-only, and no
+    # caches are used (a poisoned cache could leak into trusted jobs).
+    permissions:
+      contents: read
+    outputs:
+      done: ${{ steps.verify.outputs.done }}
+    steps:
+      - name: Check out the pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.head-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out stataudit (trusted tool source)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.stataudit-repository }}
+          ref: ${{ inputs.stataudit-ref }}
+          path: .stataudit-tool
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install stataudit (isolated virtualenv)
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/stataudit-venv"
+          "$RUNNER_TEMP/stataudit-venv/bin/python" -m pip install --quiet --disable-pip-version-check ./.stataudit-tool
+          echo "STATAUDIT_BIN=$RUNNER_TEMP/stataudit-venv/bin/stataudit" >> "$GITHUB_ENV"
+
+      - name: Download the check result
+        uses: actions/download-artifact@v4
+        with:
+          name: stataudit-check
+          path: stataudit-out
+
+      - name: Download candidates
+        uses: actions/download-artifact@v4
+        with:
+          name: stataudit-candidates
+          path: stataudit-out/candidates
+
+      - name: Install the analyses' dependencies (runs PR code)
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/stataudit-venv/bin:$PATH"
+          eval "$INSTALL_COMMAND"
+
+      - name: Verify the candidates by re-running the analyses (runs PR code; no LLM)
+        id: verify
+        env:
+          HEAD_SHA: ${{ needs.gate.outputs.head-sha }}
+          PR_NUMBER: ${{ needs.gate.outputs.pr-number }}
+        run: |
+          set -euo pipefail
+          "$STATAUDIT_BIN" agent verify --result stataudit-out/result.json --candidates stataudit-out/candidates \
+            --repo-dir . --json stataudit-out/result.json --out stataudit-out/card.md
+          echo "$PR_NUMBER" > stataudit-out/pr_number
+          echo "$HEAD_SHA" > stataudit-out/head_sha
+          echo "done=true" >> "$GITHUB_OUTPUT"
+
+      - name: Write the card to the job summary
+        if: always() && hashFiles('stataudit-out/result.json') != ''
+        run: '"$STATAUDIT_BIN" summary --json stataudit-out/result.json'
+
+      - name: Upload result
+        if: steps.verify.outputs.done == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stataudit-result
+          path: |
+            stataudit-out/result.json
+            stataudit-out/card.md
+            stataudit-out/pr_number
+            stataudit-out/head_sha
+          retention-days: 7

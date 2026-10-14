@@ -1,0 +1,29 @@
+# stataudit configuration (https://github.com/bhaskargurram-ai/stataudit).
+#
+# In CI this file is read from the pull request's BASE commit, so a pull
+# request cannot weaken its own check. Every key is optional.
+
+alpha = 0.05
+fail_on = "fail"                    # never | warn | fail: when `stataudit ci` exits non-zero
+
+# Analyses re-run under the tracer on every pull request (this EXECUTES them, in
+# the unprivileged job). Opt-in: list the scripts and notebooks to run.
+run = ["analysis/**/*.py"]
+
+# Reports whose APA-style results (t(28) = 2.20, p = .036, ...) are recomputed when they change.
+reports = ["reports/**/*.md"]
+
+# lint = ["**/*.py", "**/*.ipynb"]  # statically checked when they change
+# lint_ignore = ["SA107"]
+# timeout = 300                     # seconds per analysis
+# max_files = 50
+
+[agent]                             # verified fixes (stataudit-agent.yml); experimental
+enabled = true
+# max_fixes = 3                     # analyses per pull request
+# max_tool_calls = 12
+# share_data = false                # never send raw data rows to the LLM unless true
+
+# [llm]                             # the key only comes from STATAUDIT_LLM_API_KEY
+# provider = "anthropic"            # or "openai" for any OpenAI-compatible endpoint
+# model = ""

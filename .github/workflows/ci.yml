@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,6 +17,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -22,16 +27,98 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: Unit tests
-        run: pytest -q
+      - name: Unit tests (pytest)
+        run: python -m pytest -q
+      - name: Unit tests (stdlib unittest)
+        run: python -m unittest discover -s tests
       - name: CLI smoke tests on examples
         run: |
+          set -euo pipefail
           python -m stataudit --help
           # flawed analyses must be flagged (exit code 1)
           for f in examples/01_ttest_outliers.py examples/02_pearson_leverage.py \
-                   examples/03_chisq_sparse.py examples/04_many_tests.py; do
+                   examples/03_chisq_sparse.py examples/04_many_tests.py examples/06_notebook.ipynb; do
             if stataudit run "$f" -q; then echo "expected $f to be flagged"; exit 1; fi
           done
           # the good analysis must pass, and all report formats must be written
           stataudit run examples/05_good_analysis.py --html report.html --md report.md --json report.json
           test -s report.html && test -s report.md && test -s report.json
+          # the example report has inconsistent results; lint flags the flawed examples
+          if stataudit check-report examples/reports/results.md -q; then echo "expected inconsistencies"; exit 1; fi
+          if stataudit lint examples/01_ttest_outliers.py -q; then echo "expected lint findings"; exit 1; fi
+          stataudit lint examples/05_good_analysis.py
+
+  # Build the distributions and use them the way a user would: install the
+  # wheel into a fresh virtualenv (outside the checkout) and run the CLI and
+  # `stataudit init` against it.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist and wheel
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build twine
+          python -m build --outdir "$RUNNER_TEMP/dist"
+          ls -l "$RUNNER_TEMP/dist"
+      - name: Check distribution metadata
+        run: python -m twine check --strict "$RUNNER_TEMP"/dist/*
+      - name: Check the sdist and wheel contents
+        run: |
+          set -euo pipefail
+          tar tzf "$RUNNER_TEMP"/dist/stataudit-*.tar.gz > "$RUNNER_TEMP/sdist.txt"
+          for f in LICENSE README.md pyproject.toml src/stataudit/cli.py src/stataudit/reportcheck.py \
+                   src/stataudit/lint.py src/stataudit/agent/fix.py src/stataudit/reports/templates/_style.css; do
+            grep -q "/$f\$" "$RUNNER_TEMP/sdist.txt" || { echo "::error::sdist lacks $f"; exit 1; }
+          done
+          python -m zipfile -l "$RUNNER_TEMP"/dist/stataudit-*.whl > "$RUNNER_TEMP/wheel.txt"
+          grep -q "stataudit/reports/templates/report.html.j2" "$RUNNER_TEMP/wheel.txt" || { echo "::error::wheel lacks templates"; exit 1; }
+      - name: Install the wheel into a fresh virtualenv
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install --disable-pip-version-check "$RUNNER_TEMP"/dist/*.whl
+      - name: Smoke-test the installed CLI from outside the checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          sa="$RUNNER_TEMP/venv/bin/stataudit"
+          # The installed copy, not the checkout, must be the one that runs.
+          "$RUNNER_TEMP/venv/bin/python" -c 'import stataudit, sys; p = stataudit.__file__; print(p); sys.exit("site-packages" not in p)'
+          "$sa" --help
+          "$sa" --version
+          "$sa" agent --help
+          mkdir -p smoke && cp "$GITHUB_WORKSPACE"/examples/01_ttest_outliers.py "$GITHUB_WORKSPACE"/examples/05_good_analysis.py \
+            "$GITHUB_WORKSPACE"/examples/06_notebook.ipynb "$GITHUB_WORKSPACE"/examples/reports/results.md smoke/
+          if "$sa" run smoke/01_ttest_outliers.py -q; then echo "::error::example 01 not flagged"; exit 1; fi
+          "$sa" run smoke/05_good_analysis.py --json smoke/r.json -q
+          python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["status"] == "holds"' smoke/r.json
+          if "$sa" run smoke/06_notebook.ipynb --json smoke/nb.json -q; then echo "::error::notebook not flagged"; exit 1; fi
+          python3 -c 'import json,sys; d = json.load(open(sys.argv[1])); assert "cell" in d["results"][0]["location"], d["results"][0]["location"]' smoke/nb.json
+          "$sa" check-report smoke/results.md --fail-on never
+          "$sa" lint smoke/01_ttest_outliers.py --fail-on never
+          "$sa" explain smoke/r.json --no-llm
+          repo="$RUNNER_TEMP/init-repo"
+          mkdir -p "$repo" && git -C "$repo" init -q
+          "$sa" init --repo "$repo" --agent
+          for f in .github/workflows/stataudit.yml .github/workflows/stataudit-comment.yml \
+                   .github/workflows/stataudit-agent.yml stataudit.toml; do
+            test -s "$repo/$f" || { echo "::error::init did not write $f"; exit 1; }
+          done
+          # `stataudit ci` on a tiny repository, then the card's data block
+          mkdir -p "$repo/analysis" && cp smoke/01_ttest_outliers.py "$repo/analysis/"
+          git -C "$repo" add -A && git -C "$repo" -c user.email=ci@example.com -c user.name=ci commit -qm init
+          "$sa" ci --repo "$repo" --all --out-dir "$RUNNER_TEMP/ci-out" --fail-on never -q
+          "$RUNNER_TEMP/venv/bin/python" - "$RUNNER_TEMP/ci-out" <<'PY'
+          import pathlib, sys
+          from stataudit.carddata import parse_card_data
+          out = pathlib.Path(sys.argv[1])
+          data = parse_card_data((out / "card.md").read_text())
+          print(data)
+          assert data and data["status"] == "fail" and data["runs"][0]["does_not_hold"] == 1, data
+          PY
