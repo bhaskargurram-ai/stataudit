@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "stataudit"
 version = "1.0.0"
 description = "Check AI-written statistics with evidence: re-run the analysis, audit each test's assumptions on the real data, recompute reported p-values, lint analysis code, and verify proposed fixes."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Bhaskar Gurram", email = "gurrambhaskar.ai@gmail.com" }]
 requires-python = ">=3.10"
 keywords = ["statistics", "audit", "assumptions", "hypothesis-testing", "scipy", "reproducibility", "p-hacking",
@@ -15,7 +16,6 @@ keywords = ["statistics", "audit", "assumptions", "hypothesis-testing", "scipy",
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
