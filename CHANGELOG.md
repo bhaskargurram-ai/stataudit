@@ -50,7 +50,8 @@ All notable changes to this project are documented here. The format follows
   `lint_code`, `lint_file`.
 - Examples: `06_notebook.ipynb` and `reports/results.md`.
 - Release engineering: packaging job in CI (sdist + wheel, `twine check`,
-  installed-wheel smoke tests), `release.yml` (PyPI trusted publishing and a
+  installed-wheel smoke tests), `release.yml` (one-click release that creates the tag,
+  PyPI publishing with a `PYPI_API_TOKEN` secret or trusted publishing, and a
   GitHub release from this changelog), `pages.yml`; docs/AGENT.md,
   docs/SECURITY_MODEL.md, docs/TESTING.md, docs/REFERENCE.md.
 
