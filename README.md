@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="stataudit: Does the conclusion survive?" width="880">
+  <img src="https://raw.githubusercontent.com/bhaskargurram-ai/stataudit/main/docs/assets/banner.svg" alt="stataudit: Does the conclusion survive?" width="880">
 </p>
 
 <p align="center">
@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/bhaskargurram-ai/stataudit/actions/workflows/ci.yml"><img src="https://github.com/bhaskargurram-ai/stataudit/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+  <a href="https://github.com/bhaskargurram-ai/stataudit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="Python 3.10 to 3.13">
   <img src="https://img.shields.io/badge/version-1.0.0-informational" alt="Version 1.0.0">
   <img src="https://img.shields.io/badge/agent-experimental-orange" alt="Agent: experimental">
@@ -19,12 +19,12 @@
 It doesn't matter whether a person or an AI assistant wrote the analysis. stataudit only looks at what the code did to the data.
 
 <p align="center">
-  <img src="docs/images/report-example-01.png" alt="The stataudit HTML report for examples/01_ttest_outliers.py: at least one conclusion does not hold. Student's t-test at line 25 reports p = 3.2e-04, but treated has 3 outliers, variances differ 15.9 times and treated is non-normal (n = 14). Welch's t-test gives p = 0.066, Yuen's 20% trimmed t-test 0.342 and Mann-Whitney U 0.073, none significant." width="760">
+  <img src="https://raw.githubusercontent.com/bhaskargurram-ai/stataudit/main/docs/images/report-example-01.png" alt="The stataudit HTML report for examples/01_ttest_outliers.py: at least one conclusion does not hold. Student's t-test at line 25 reports p = 3.2e-04, but treated has 3 outliers, variances differ 15.9 times and treated is non-normal (n = 14). Welch's t-test gives p = 0.066, Yuen's 20% trimmed t-test 0.342 and Mann-Whitney U 0.073, none significant." width="760">
   <br><sub>Real output: <code>stataudit run examples/01_ttest_outliers.py --html report.html</code>, cropped below the result card. The script reported a significant difference; nothing that accounts for the three outliers agrees.</sub>
 </p>
 
 > [!NOTE]
-> **Status: 1.0.0.** stataudit traces 13 `scipy.stats` tests plus statsmodels OLS, in scripts and Jupyter notebooks. It also recomputes p-values reported in text (`check-report`), lints analysis code without running it (`lint`), and runs all three on pull requests. The agent (`fix`, `explain`) is **experimental and off by default**; it needs your own LLM API key, and nothing it writes counts until stataudit has run it. The full reference for every command, option and key is [docs/REFERENCE.md](docs/REFERENCE.md).
+> **Status: 1.0.0.** stataudit traces 13 `scipy.stats` tests plus statsmodels OLS, in scripts and Jupyter notebooks. It also recomputes p-values reported in text (`check-report`), lints analysis code without running it (`lint`), and runs all three on pull requests. The agent (`fix`, `explain`) is **experimental and off by default**; it needs your own LLM API key, and nothing it writes counts until stataudit has run it. The full reference for every command, option and key is [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md).
 
 ## Contents
 
@@ -69,7 +69,7 @@ A careful analysis gets ✅ and no alternatives at all. ⚠️ means **fragile**
 ## How it works
 
 <p align="center">
-  <img src="docs/assets/how-it-works.svg" alt="stataudit run executes a script or notebook in a subprocess and traces every scipy.stats and statsmodels OLS call. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data. Fixed rules then give a verdict: holds, fragile or does not hold. Separately, stataudit lint and stataudit check-report run without executing anything. Results go to terminal, HTML, Markdown, JSON and PR comment reports." width="880">
+  <img src="https://raw.githubusercontent.com/bhaskargurram-ai/stataudit/main/docs/assets/how-it-works.svg" alt="stataudit run executes a script or notebook in a subprocess and traces every scipy.stats and statsmodels OLS call. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data. Fixed rules then give a verdict: holds, fragile or does not hold. Separately, stataudit lint and stataudit check-report run without executing anything. Results go to terminal, HTML, Markdown, JSON and PR comment reports." width="880">
 </p>
 
 1. **Trace.** `stataudit run` executes your script or notebook in a subprocess with a timeout. Thin wrappers around `scipy.stats` (and statsmodels OLS, when installed) record each call's input arrays, options, result and call site (`analysis.py:25`, or `analysis.ipynb cell 4, line 2` in a notebook). Your code runs unchanged and gets the real return values.
@@ -81,22 +81,22 @@ Two more commands work without running anything: [`check-report`](#checking-repo
 
 ## Analyses that look fine
 
-Each bundled example is the kind of analysis an assistant writes when asked a simple question. Every verdict below is real output of `stataudit run examples/<file>`, and [`tests/test_examples.py`](tests/test_examples.py) pins them.
+Each bundled example is the kind of analysis an assistant writes when asked a simple question. Every verdict below is real output of `stataudit run examples/<file>`, and [`tests/test_examples.py`](https://github.com/bhaskargurram-ai/stataudit/blob/main/tests/test_examples.py) pins them.
 
 <p align="center">
-  <img src="docs/assets/does-it-survive.svg" alt="Example 01 measured. Left: control has 60 values between 8 and 15 minutes with mean 11.7; treated has 11 values between 10 and 14 plus 3 users at 21.5, 24 and 26.5 minutes, which pull its mean from 12.0 to 14.6; variances differ 16 times. Right: on a log p-value scale with alpha = 0.05, Student's t-test, which the script ran, gives p = 0.0003; Welch's t gives 0.066, Mann-Whitney U 0.073 and Yuen's trimmed t 0.342, all above alpha. Verdict: does not hold." width="880">
+  <img src="https://raw.githubusercontent.com/bhaskargurram-ai/stataudit/main/docs/assets/does-it-survive.svg" alt="Example 01 measured. Left: control has 60 values between 8 and 15 minutes with mean 11.7; treated has 11 values between 10 and 14 plus 3 users at 21.5, 24 and 26.5 minutes, which pull its mean from 12.0 to 14.6; variances differ 16 times. Right: on a log p-value scale with alpha = 0.05, Student's t-test, which the script ran, gives p = 0.0003; Welch's t gives 0.066, Mann-Whitney U 0.073 and Yuen's trimmed t 0.342, all above alpha. Verdict: does not hold." width="880">
 </p>
 
 | Example | What the script concluded | What stataudit found | Verdict |
 |---|---|---|---|
-| [`01_ttest_outliers.py`](examples/01_ttest_outliers.py)<br><sub>"Is the new onboarding flow different?"</sub> | Student's t-test, p = 3.2e-04 | treated has 3 outliers and is non-normal (n = 14); variances differ 15.9×. Welch p = 0.066, Yuen p = 0.342, Mann-Whitney p = 0.073 | ❌ does not hold |
-| [`02_pearson_leverage.py`](examples/02_pearson_leverage.py)<br><sub>"Does marketing spend predict sign-ups?"</sub> | Pearson r = 0.81, p = 1.2e-06 | 2 high-leverage points (two national campaigns) create the correlation. Without them r = 0.06, p = 0.774; Spearman ρ = 0.29, p = 0.154 | ❌ does not hold |
-| [`03_chisq_sparse.py`](examples/03_chisq_sparse.py)<br><sub>"Does churn reason depend on plan?"</sub> | chi-square on a 3×4 table, p = 0.03 | 8 of 12 cells (67 %) have expected count < 5, minimum 0.07. Monte Carlo permutation test (20,000 tables, fixed margins and seed): p = 0.08 | ❌ does not hold |
-| [`04_many_tests.py`](examples/04_many_tests.py)<br><sub>"Which of 15 metrics changed?"</sub> | 15 Welch t-tests, 3 significant | no assumption problems, but with 15 tests the chance of at least one false positive is 54 %. After Holm, 2 of the 3 survive; one (p = 0.02) gets adjusted p = 0.256 | ⚠️ fragile |
-| [`05_good_analysis.py`](examples/05_good_analysis.py) | Welch t-test, p = 0.003 | no assumption problems, so no alternatives are computed | ✅ holds |
-| [`06_notebook.ipynb`](examples/06_notebook.ipynb)<br><sub>the same mistake as 01, in a notebook</sub> | Student's t-test at `cell 4, line 2`, p = 0.01 | new has 2 outliers and is non-normal (n = 12); variances differ 12.4×. Welch p = 0.136, Yuen p = 0.273, Mann-Whitney p = 0.149 | ❌ does not hold |
+| [`01_ttest_outliers.py`](https://github.com/bhaskargurram-ai/stataudit/blob/main/examples/01_ttest_outliers.py)<br><sub>"Is the new onboarding flow different?"</sub> | Student's t-test, p = 3.2e-04 | treated has 3 outliers and is non-normal (n = 14); variances differ 15.9×. Welch p = 0.066, Yuen p = 0.342, Mann-Whitney p = 0.073 | ❌ does not hold |
+| [`02_pearson_leverage.py`](https://github.com/bhaskargurram-ai/stataudit/blob/main/examples/02_pearson_leverage.py)<br><sub>"Does marketing spend predict sign-ups?"</sub> | Pearson r = 0.81, p = 1.2e-06 | 2 high-leverage points (two national campaigns) create the correlation. Without them r = 0.06, p = 0.774; Spearman ρ = 0.29, p = 0.154 | ❌ does not hold |
+| [`03_chisq_sparse.py`](https://github.com/bhaskargurram-ai/stataudit/blob/main/examples/03_chisq_sparse.py)<br><sub>"Does churn reason depend on plan?"</sub> | chi-square on a 3×4 table, p = 0.03 | 8 of 12 cells (67 %) have expected count < 5, minimum 0.07. Monte Carlo permutation test (20,000 tables, fixed margins and seed): p = 0.08 | ❌ does not hold |
+| [`04_many_tests.py`](https://github.com/bhaskargurram-ai/stataudit/blob/main/examples/04_many_tests.py)<br><sub>"Which of 15 metrics changed?"</sub> | 15 Welch t-tests, 3 significant | no assumption problems, but with 15 tests the chance of at least one false positive is 54 %. After Holm, 2 of the 3 survive; one (p = 0.02) gets adjusted p = 0.256 | ⚠️ fragile |
+| [`05_good_analysis.py`](https://github.com/bhaskargurram-ai/stataudit/blob/main/examples/05_good_analysis.py) | Welch t-test, p = 0.003 | no assumption problems, so no alternatives are computed | ✅ holds |
+| [`06_notebook.ipynb`](https://github.com/bhaskargurram-ai/stataudit/blob/main/examples/06_notebook.ipynb)<br><sub>the same mistake as 01, in a notebook</sub> | Student's t-test at `cell 4, line 2`, p = 0.01 | new has 2 outliers and is non-normal (n = 12); variances differ 12.4×. Welch p = 0.136, Yuen p = 0.273, Mann-Whitney p = 0.149 | ❌ does not hold |
 
-[`examples/reports/results.md`](examples/reports/results.md) is a write-up for `check-report`: of its 8 reported results, 5 are consistent, 1 is inconsistent and 2 are gross inconsistencies ([below](#checking-reported-numbers-check-report)).
+[`examples/reports/results.md`](https://github.com/bhaskargurram-ai/stataudit/blob/main/examples/reports/results.md) is a write-up for `check-report`: of its 8 reported results, 5 are consistent, 1 is inconsistent and 2 are gross inconsistencies ([below](#checking-reported-numbers-check-report)).
 
 The terminal report for example 01:
 
@@ -311,7 +311,7 @@ Suppress a finding with a comment on the reported line, `# stataudit: ignore` or
 Finding a fragile conclusion is half the job. The opt-in agent tries the other half, **proposing a corrected analysis**, and stataudit then checks the proposal the only way that counts: by running it. The agent is **off by default** and needs your own API key.
 
 <p align="center">
-  <img src="docs/assets/fix-loop.svg" alt="The fix agent. The model sees the script as text, the audit findings and data summaries (raw values only with --share-data). It proposes a patch with read-only tools and a schema-checked submit; this step holds the API key and runs nothing. A static gate rejects patches that do not parse or that add imports of os, subprocess, socket, shutil, ctypes or importlib, or calls such as eval, exec, __import__ or open for writing. stataudit runs the patched script through the tracer in a subprocess with a timeout and no secrets, and accepts it only if the same questions are answered, the tests hold or improve and no new critical findings appear. Otherwise the reasons are fed back for up to two rounds; if nothing verifies, the plain audit report stands." width="880">
+  <img src="https://raw.githubusercontent.com/bhaskargurram-ai/stataudit/main/docs/assets/fix-loop.svg" alt="The fix agent. The model sees the script as text, the audit findings and data summaries (raw values only with --share-data). It proposes a patch with read-only tools and a schema-checked submit; this step holds the API key and runs nothing. A static gate rejects patches that do not parse or that add imports of os, subprocess, socket, shutil, ctypes or importlib, or calls such as eval, exec, __import__ or open for writing. stataudit runs the patched script through the tracer in a subprocess with a timeout and no secrets, and accepts it only if the same questions are answered, the tests hold or improve and no new critical findings appear. Otherwise the reasons are fed back for up to two rounds; if nothing verifies, the plain audit report stands." width="880">
 </p>
 
 ```bash
@@ -336,7 +336,7 @@ A verified fix means stataudit's audit of the new analysis is better and every o
 
 **`stataudit explain SOURCE`** writes a summary of the findings for a reader who isn't a statistician. SOURCE is a JSON report from `run`, `check-report` or `lint`, an analysis (audited first) or a report document (checked first). The text is grounded: every number in it must match a number in the findings, or the whole text is rejected and the deterministic summary is printed instead. Without an LLM configured, or with `--no-llm`, you get the deterministic summary.
 
-**Honest limits.** The agent is tested end to end with a scripted fake model; how often real models produce fixes that pass verification has **not been measured**. Problems that need a design decision (which tests form a family, whether an outlier is an error) can't be settled by rewriting code: example 04 is one. Token use is reported with every run. OpenAI's GPT-6 Luna only calls tools through Chat Completions with `STATAUDIT_LLM_REASONING_EFFORT=none`, and GPT-6 models reject `temperature` unless reasoning is off (stataudit sends none). Details are in [docs/AGENT.md](docs/AGENT.md).
+**Honest limits.** The agent is tested end to end with a scripted fake model; how often real models produce fixes that pass verification has **not been measured**. Problems that need a design decision (which tests form a family, whether an outlier is an error) can't be settled by rewriting code: example 04 is one. Token use is reported with every run. OpenAI's GPT-6 Luna only calls tools through Chat Completions with `STATAUDIT_LLM_REASONING_EFFORT=none`, and GPT-6 models reject `temperature` unless reasoning is off (stataudit sends none). Details are in [docs/AGENT.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/AGENT.md).
 
 ## MCP server and web UI
 
@@ -363,7 +363,7 @@ The server treats its inputs as data: it accepts only known test names and numer
 
 ## GitHub integration
 
-stataudit runs on pull requests as separate workflows, so that PR code and privileged tokens never share a job ([why](#security-model)). Each caller is a few lines pointing at a reusable workflow in this repository; `stataudit init` writes them for you, and [`examples/workflows/`](examples/workflows) holds exactly what `stataudit init --agent` writes (a test keeps the two in sync). Pin `@v1.0.0`, or a full commit SHA if you want to be strict, and keep `stataudit-ref` the same.
+stataudit runs on pull requests as separate workflows, so that PR code and privileged tokens never share a job ([why](#security-model)). Each caller is a few lines pointing at a reusable workflow in this repository; `stataudit init` writes them for you, and [`examples/workflows/`](https://github.com/bhaskargurram-ai/stataudit/tree/main/examples/workflows) holds exactly what `stataudit init --agent` writes (a test keeps the two in sync). Pin `@v1.0.0`, or a full commit SHA if you want to be strict, and keep `stataudit-ref` the same.
 
 **`.github/workflows/stataudit.yml`** checks the pull request. It is unprivileged, and it is the only place PR code runs.
 
@@ -483,23 +483,23 @@ When the check finds an analysis that is fragile or does not hold, the agent wor
 
 </details>
 
-Because `workflow_run` workflows always run from the default branch, merge the workflow files there before the comment and agent workflows act on pull requests. A composite action (`uses: bhaskargurram-ai/stataudit@v1.0.0` with `command: ci | summary | comment | agent-propose | agent-verify`) is available for custom setups; see [docs/REFERENCE.md](docs/REFERENCE.md#composite-action-actionyml).
+Because `workflow_run` workflows always run from the default branch, merge the workflow files there before the comment and agent workflows act on pull requests. A composite action (`uses: bhaskargurram-ai/stataudit@v1.0.0` with `command: ci | summary | comment | agent-propose | agent-verify`) is available for custom setups; see [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md#composite-action-actionyml).
 
 ## Security model
 
 Running PR code safely is the core problem. stataudit splits the work so that capabilities never meet in one job:
 
 <p align="center">
-  <img src="docs/assets/security-model.svg" alt="Four jobs and their capabilities. The check job runs on pull_request: it runs PR code with a read-only token and no secrets, and hands on result.json and card.md. The agent propose job holds the LLM API key, reads PR files as data and never runs PR code. The agent verify job runs the patched script with no secrets on a separate VM. The comment job holds a write token, never checks out PR code, validates result.json and re-renders the card. No job both runs PR code and holds a secret or a write token." width="880">
+  <img src="https://raw.githubusercontent.com/bhaskargurram-ai/stataudit/main/docs/assets/security-model.svg" alt="Four jobs and their capabilities. The check job runs on pull_request: it runs PR code with a read-only token and no secrets, and hands on result.json and card.md. The agent propose job holds the LLM API key, reads PR files as data and never runs PR code. The agent verify job runs the patched script with no secrets on a separate VM. The comment job holds a write token, never checks out PR code, validates result.json and re-renders the card. No job both runs PR code and holds a secret or a write token." width="880">
 </p>
 
 - **Untrusted code runs only in jobs without secrets.** The check job runs on `pull_request` with `contents: read`, no secrets and `persist-credentials: false`. stataudit itself is checked out from this repository at `stataudit-ref` and installed **before** any PR code runs, and its configuration is read from the base commit. Only files you opted in with `run = [...]` are executed; `lint` and `check-report` never execute anything.
 - **The LLM key never meets PR code.** The propose job checks the PR out as data and never installs or runs it. The verify job, on a separate VM, has no secrets. Candidates also pass a static denylist before they run, but the denylist is a filter, not the boundary: the boundary is that the job that runs them holds nothing worth stealing.
 - **The privileged comment job never checks out or executes PR code.** It treats the artifact as hostile: it validates the PR number and the `result.json` schema, checks the PR's current head SHA, re-renders the card itself, escapes all PR-derived text, only updates a card comment written by a bot, and warns on the card when the PR changes workflows or the stataudit configuration.
-- **No `pull_request_target`, no `${{ }}` expressions in `run:` scripts, no caches,** and minimal `permissions:` everywhere. [`tests/test_workflows.py`](tests/test_workflows.py) checks these invariants on every workflow.
+- **No `pull_request_target`, no `${{ }}` expressions in `run:` scripts, no caches,** and minimal `permissions:` everywhere. [`tests/test_workflows.py`](https://github.com/bhaskargurram-ai/stataudit/blob/main/tests/test_workflows.py) checks these invariants on every workflow.
 - **Prompt injection.** The deterministic path has nothing to inject into. Code, data, reports and docstrings reach an LLM only as delimited, untrusted data; the model has no write, exec or network tools; its output is schema-validated; and nothing it writes counts until stataudit has run and re-audited it.
 
-stataudit raises the bar; it is **not** a sandbox. A malicious PR can still tamper with its own results inside the unprivileged job, and `stataudit run` on your laptop runs the script with your permissions, like `python analysis.py` would. Read [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for the full threat model.
+stataudit raises the bar; it is **not** a sandbox. A malicious PR can still tamper with its own results inside the unprivileged job, and `stataudit run` on your laptop runs the script with your permissions, like `python analysis.py` would. Read [docs/SECURITY_MODEL.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/SECURITY_MODEL.md) for the full threat model.
 
 ## How stataudit compares
 
@@ -633,7 +633,7 @@ stataudit mcp          (same as the stataudit-mcp command)
 | `--color/--no-color` | force or disable ANSI colours |
 | `-v`, `--verbose` | show details for clean results too |
 
-You can also run `python -m stataudit …`. Every option, the JSON formats and the card's data block are documented in [docs/REFERENCE.md](docs/REFERENCE.md).
+You can also run `python -m stataudit …`. Every option, the JSON formats and the card's data block are documented in [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md).
 
 </details>
 
@@ -704,15 +704,15 @@ Only Python is traced today. `check-report` works on any text, whatever produced
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). In short: every new check needs a test showing that it flags a bad case and passes a clean one, and every new statistical helper needs a test against an independent calculation.
+Contributions are welcome. See [CONTRIBUTING.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/CONTRIBUTING.md). In short: every new check needs a test showing that it flags a bad case and passes a clean one, and every new statistical helper needs a test against an independent calculation.
 
 ```bash
 pip install -e ".[dev]"
 python -m pytest            # or, without pytest: python -m unittest discover -s tests
 ```
 
-[docs/TESTING.md](docs/TESTING.md) describes every test level, including the agent's scripted fake-LLM tests and the workflow invariant tests. Please report security issues privately through the repository's security advisory form rather than in a public issue.
+[docs/TESTING.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/TESTING.md) describes every test level, including the agent's scripted fake-LLM tests and the workflow invariant tests. Please report security issues privately through the repository's security advisory form rather than in a public issue.
 
 ## License
 
-[MIT](LICENSE) © 2026 Bhaskar Gurram
+[MIT](https://github.com/bhaskargurram-ai/stataudit/blob/main/LICENSE) © 2026 Bhaskar Gurram
