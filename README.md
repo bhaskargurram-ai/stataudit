@@ -24,13 +24,13 @@ It doesn't matter whether a person or an AI assistant wrote the analysis. statau
 </p>
 
 > [!NOTE]
-> **Status: 1.0.0.** stataudit traces 13 `scipy.stats` tests plus statsmodels OLS, in scripts and Jupyter notebooks. It also checks reported results in text (`check-report`) and lints analysis code without running it (`lint`). The agent that proposes fixes (`fix`, `explain`) is **experimental and off by default**; it needs your own LLM API key, and nothing it writes counts until stataudit has run it.
+> **Status: 1.0.0.** stataudit traces 13 `scipy.stats` tests plus statsmodels OLS, in scripts and Jupyter notebooks. It also recomputes p-values reported in text (`check-report`), lints analysis code without running it (`lint`), and runs all three on pull requests. The agent (`fix`, `explain`) is **experimental and off by default**; it needs your own LLM API key, and nothing it writes counts until stataudit has run it. The full reference for every command, option and key is [docs/REFERENCE.md](docs/REFERENCE.md).
 
 ## Contents
 
 - [Why audit an analysis?](#why-audit-an-analysis)
 - [How it works](#how-it-works)
-- [Four analyses that look fine](#four-analyses-that-look-fine)
+- [Analyses that look fine](#analyses-that-look-fine)
 - [Quick start](#quick-start)
 - [What each auditor checks](#what-each-auditor-checks)
 - [How verdicts work](#how-verdicts-work)
@@ -72,16 +72,16 @@ A careful analysis gets ✅ and no alternatives at all. ⚠️ means **fragile**
   <img src="docs/assets/how-it-works.svg" alt="stataudit run executes a script or notebook in a subprocess and traces every scipy.stats and statsmodels OLS call. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data. Fixed rules then give a verdict: holds, fragile or does not hold. Separately, stataudit lint and stataudit check-report run without executing anything. Results go to terminal, HTML, Markdown, JSON and PR comment reports." width="880">
 </p>
 
-1. **Trace.** `stataudit run` executes your script or notebook in a subprocess with a timeout. Thin wrappers around `scipy.stats` (and statsmodels OLS, when installed) record each call's input arrays, options, result and call site (`analysis.py:25`, or `cell 4, line 2` in a notebook). Your code runs unchanged and gets the real return values.
+1. **Trace.** `stataudit run` executes your script or notebook in a subprocess with a timeout. Thin wrappers around `scipy.stats` (and statsmodels OLS, when installed) record each call's input arrays, options, result and call site (`analysis.py:25`, or `analysis.ipynb cell 4, line 2` in a notebook). Your code runs unchanged and gets the real return values.
 2. **Audit.** Each recorded call goes to the auditor for that test, which checks the assumptions on the recorded data. Every finding carries its evidence: Shapiro-Wilk p and skew, robust z of each outlier, variance ratio and Levene p, Cook's distance, expected counts.
 3. **Alternatives.** Only when a check fails, stataudit computes the analyses that check calls for, on the same data: Welch's t when variances differ, Yuen's trimmed t and Mann-Whitney U with outliers, Spearman and a refit without high-leverage points for a correlation, HC3 standard errors for a regression, Fisher's exact or a Monte Carlo test for a sparse table, and Holm-Bonferroni across every p-value in the script.
 4. **Verdict.** Fixed rules compare the conclusions at α: ✅ **holds**, ⚠️ **fragile** or ❌ **does not hold**, with one plain-English sentence per test. No LLM is involved.
 
 Two more commands work without running anything: [`check-report`](#checking-reported-numbers-check-report) recomputes p-values from results reported in text, and [`lint`](#linting-without-running-lint) reads analysis code as a syntax tree.
 
-## Four analyses that look fine
+## Analyses that look fine
 
-Each bundled example is the kind of analysis an assistant writes when asked a simple question. Every verdict below is real output of `stataudit run examples/0X_*.py`, and [`tests/test_examples.py`](tests/test_examples.py) pins them.
+Each bundled example is the kind of analysis an assistant writes when asked a simple question. Every verdict below is real output of `stataudit run examples/<file>`, and [`tests/test_examples.py`](tests/test_examples.py) pins them.
 
 <p align="center">
   <img src="docs/assets/does-it-survive.svg" alt="Example 01 measured. Left: control has 60 values between 8 and 15 minutes with mean 11.7; treated has 11 values between 10 and 14 plus 3 users at 21.5, 24 and 26.5 minutes, which pull its mean from 12.0 to 14.6; variances differ 16 times. Right: on a log p-value scale with alpha = 0.05, Student's t-test, which the script ran, gives p = 0.0003; Welch's t gives 0.066, Mann-Whitney U 0.073 and Yuen's trimmed t 0.342, all above alpha. Verdict: does not hold." width="880">
@@ -94,6 +94,9 @@ Each bundled example is the kind of analysis an assistant writes when asked a si
 | [`03_chisq_sparse.py`](examples/03_chisq_sparse.py)<br><sub>"Does churn reason depend on plan?"</sub> | chi-square on a 3×4 table, p = 0.03 | 8 of 12 cells (67 %) have expected count < 5, minimum 0.07. Monte Carlo permutation test (20,000 tables, fixed margins and seed): p = 0.08 | ❌ does not hold |
 | [`04_many_tests.py`](examples/04_many_tests.py)<br><sub>"Which of 15 metrics changed?"</sub> | 15 Welch t-tests, 3 significant | no assumption problems, but with 15 tests the chance of at least one false positive is 54 %. After Holm, 2 of the 3 survive; one (p = 0.02) gets adjusted p = 0.256 | ⚠️ fragile |
 | [`05_good_analysis.py`](examples/05_good_analysis.py) | Welch t-test, p = 0.003 | no assumption problems, so no alternatives are computed | ✅ holds |
+| [`06_notebook.ipynb`](examples/06_notebook.ipynb)<br><sub>the same mistake as 01, in a notebook</sub> | Student's t-test at `cell 4, line 2`, p = 0.01 | new has 2 outliers and is non-normal (n = 12); variances differ 12.4×. Welch p = 0.136, Yuen p = 0.273, Mann-Whitney p = 0.149 | ❌ does not hold |
+
+[`examples/reports/results.md`](examples/reports/results.md) is a write-up for `check-report`: of its 8 reported results, 5 are consistent, 1 is inconsistent and 2 are gross inconsistencies ([below](#checking-reported-numbers-check-report)).
 
 The terminal report for example 01:
 
@@ -140,15 +143,27 @@ The core needs only numpy, scipy, pandas, click and jinja2 on Python 3.10 or new
 ### 2. Audit a script or a notebook
 
 ```bash
-stataudit run analysis.py                                  # terminal report
-stataudit run analysis.ipynb                               # notebooks too
-stataudit run analysis.py --html report.html --md report.md --json report.json
+stataudit run examples/01_ttest_outliers.py                # terminal report
+stataudit run examples/06_notebook.ipynb                   # notebooks too
+stataudit run examples/01_ttest_outliers.py --html report.html --md report.md --json report.json
 stataudit run analysis.py --alpha 0.01 -- --input data.csv # args after -- go to your script
 ```
 
-Exit codes: `0` when every conclusion holds, `1` when any is fragile or does not hold. Use `--fail-on fails` to exit 1 only for ❌, or `--fail-on never` to always exit 0.
+Exit codes: `0` when every conclusion holds, `1` when any is fragile or does not hold, `2` for usage errors. Use `--fail-on fails` to exit 1 only for ❌, or `--fail-on never` to always exit 0.
 
-**Notebooks.** `stataudit run` executes the code cells in order through the same tracer. IPython magics (`%matplotlib`, `%%time`) and shell lines (`!pip install …`) are stripped, and the report says which ones were. Findings point at `cell N, line M`.
+**Notebooks.** `stataudit run` executes the code cells in order, in one namespace and in the notebook's directory, like "Run all" (no Jupyter needed). IPython syntax is rewritten so that line numbers stay exact: line magics and `!shell` lines are skipped, `%%time`-style cell magics keep their body, and each change is listed as a note in the report. Findings point at `name.ipynb cell N, line M`, where N counts code cells only:
+
+```text
+$ stataudit run examples/06_notebook.ipynb
+❌ [1] Student's t-test — new vs old  (06_notebook.ipynb cell 4, line 2)
+    > res = stats.ttest_ind(new, old)
+    ...
+Script-level checks
+  · 3 IPython-only line(s) were skipped or rewritten before running
+    cell 1, line 1: skipped magic %matplotlib: %matplotlib inline; cell 2, line 1:
+    skipped shell command: !pip install --quiet scipy; cell 4: removed the cell magic
+    %%time (its Python body still runs)
+```
 
 **From Python or inside Jupyter:**
 
@@ -171,7 +186,9 @@ stataudit.audit_pearson(x, y)
 stataudit.audit_chi2(table)
 stataudit.audit_ols(df[["dose", "age"]], df["response"])
 stataudit.audit_call("f_oneway", [g1, g2, g3])    # any supported scipy.stats test by name
-stataudit.audit_script("analysis.py")
+stataudit.audit_script("analysis.py")             # or audit_notebook("analysis.ipynb")
+stataudit.check_report_text("t(28) = 2.20, p = .36")
+stataudit.lint_file("analysis.py")
 ```
 
 **A CSV, no script:**
@@ -184,8 +201,8 @@ stataudit check-data data.csv --test chi2_contingency --x-col plan --y-col reaso
 ### 3. Check reported results and lint code
 
 ```bash
-stataudit check-report paper.md       # also .txt, .html, and .pdf when pdftotext is installed
-stataudit lint analysis.py notebooks/eda.ipynb
+stataudit check-report examples/reports/results.md        # also .txt, .rst, .html, and .pdf with pdftotext
+stataudit lint examples/01_ttest_outliers.py examples/06_notebook.ipynb
 ```
 
 ### 4. Add it to pull requests
@@ -194,7 +211,7 @@ stataudit lint analysis.py notebooks/eda.ipynb
 stataudit init            # add --agent to also set up the experimental fix agent
 ```
 
-`init` writes the caller workflows described under [GitHub integration](#github-integration) plus a commented `stataudit.toml`, refuses to overwrite existing files unless you pass `--force`, and prints the next steps.
+`init` writes the caller workflows described under [GitHub integration](#github-integration) plus a commented `stataudit.toml`, detects how to install your analyses' dependencies (`requirements.txt`, else `pip install -e .`; override with `--install-command`), refuses to overwrite existing files unless you pass `--force`, and prints the next steps.
 
 ## What each auditor checks
 
@@ -225,50 +242,76 @@ Every statistical helper (HC3, Breusch-Pagan, Welch's ANOVA, Cook's distance, Ho
 
 ## Checking reported numbers (`check-report`)
 
-Analyses end up as prose: a report, a README, a paper draft, an assistant's summary. `stataudit check-report` reads APA-style results from Markdown, plain text, HTML, or PDF (when `pdftotext` is installed), recomputes each p-value with scipy from the reported statistic and degrees of freedom, and compares it with the reported one, in the spirit of [statcheck](https://github.com/MicheleNuijten/statcheck).
+Analyses end up as prose: a report, a README, a paper draft, an assistant's summary. `stataudit check-report` reads APA-style results from Markdown, plain text, reStructuredText, HTML, or PDF (when `pdftotext` is installed), recomputes each p-value with scipy from the reported statistic and degrees of freedom, and compares it with the reported one, in the spirit of [statcheck](https://github.com/MicheleNuijten/statcheck). Nothing is executed.
 
-It recognises `t(df) = x`, `F(df1, df2) = x`, `r(df) = x`, `χ2(df) = x` / `χ²(df, N = n) = x` / `chi2(df) = x` and `z = x`, followed by `p = …`, `p < …`, `p > …` or `ns`, including Unicode minus signs and one-tailed mentions. Reported values are allowed to be rounded: a reported `p = .04` is consistent with any recomputed p that rounds to .04.
+```text
+$ stataudit check-report examples/reports/results.md
+stataudit check-report — examples/reports/results.md
+────────────────────────────────────────────────────────────────────────
+❌ A reported p-value flips significance
+  8 result(s): 5 consistent, 1 inconsistent, 2 gross, 0 impossible; alpha = 0.05
 
-| Flag | Meaning |
+❌ gross inconsistency  line 16: F(2, 69) = 2.95, p = .03
+    Reported p = .03, but the statistic gives p = 0.059: the result is not significant at α = 0.05.
+❌ gross inconsistency  line 17: z = 1.70, p < .05
+    Reported p < .05, but the statistic gives p = 0.0891: the result is not significant at α = 0.05.
+⚠️ inconsistent  line 18: t(35) = 2.04, p = .03
+    Reported p = .03, but the statistic gives p = 0.049.
+(5 consistent result(s) not shown; use -v to list them)
+```
+
+| Status | Meaning |
 |---|---|
-| **inconsistent** | The recomputed p doesn't match the reported p, even allowing for rounding. |
-| **gross inconsistency** | The mismatch flips significance at α (default .05): reported significant, recomputed not, or the other way round. |
-| **impossible** | A value that can't occur: p > 1, a negative df, r outside [−1, 1]. |
+| **consistent** | The reported p-value can follow from the reported statistic, allowing for rounding: `2.20` stands for [2.195, 2.205] and `p = .036` for [.0355, .0365]. |
+| **inconsistent** | It cannot, but the significance decision at α is the same. |
+| **gross** | It cannot, and the decision flips: reported significant but recomputed not, or the reverse. As in statcheck, `p = .05` counts as significant at α = .05. |
+| **impossible** | p outside [0, 1] or exactly 0, df ≤ 0, \|r\| > 1, negative F or χ². |
 
-For example, these sentences give the following results (p-values recomputed with scipy, two-tailed):
+**What it reads.** `t(28) = 2.20`, `F(2, 45) = 3.81`, `r(48) = .32`, `χ2(2, N = 120) = 7.31` (also `χ²`, `chi2`, `chi-square`, `X2`), `z = 2.31` and `Q(12) = 25.1`, as well as R's output style (`t = 2.20, df = 28`, `X-squared = 7.31, df = 2`), Welch's fractional df, Markdown italics, simple LaTeX and Unicode minus signs. The p-value may be `p = .036`, `p < .001`, `ps < .01`, `p = 2.3e-5` or `ns`. "One-tailed" in the same sentence makes it check one-tailed. Near words such as "Bonferroni", "Holm" or "adjusted", it only checks that the corrected p is not smaller than the uncorrected one.
 
-| Reported | Recomputed p | Result |
-|---|---|---|
-| `t(28) = 2.20, p = .04` | 0.036 | consistent (rounds to .04) |
-| `χ2(1, N = 90) = 3.95, p < .05` | 0.047 | consistent |
-| `z = 2.43, p = .03` | 0.015 | inconsistent; both significant |
-| `F(2, 45) = 3.10, p = .04` | 0.055 | **gross**: not significant at .05 |
-| `r(48) = .21, p = .01` | 0.143 | **gross**: not significant at .05 |
-| `r(30) = 1.20, p < .001` | | **impossible**: r outside [−1, 1] |
+**What it doesn't.** Results split over table cells, tests without a df-based reference distribution (U, W, H) and the exact values of corrected p-values. A flag is a reason to look, not a verdict on the analysis.
 
-Like statcheck, it can only check what is written in the sentence: it doesn't read tables, and it can't tell that a p-value was deliberately adjusted (Bonferroni, Holm) unless the text says so. A flag is a reason to look, not a verdict on the analysis. The report comes in the same formats as `run` (terminal, `--html`, `--md`, `--json`).
+Options: `--alpha`, `--fail-on inconsistent|gross|never` (default `inconsistent`), `--json`, `--md`, `--html`, `-v` to list consistent results too.
 
 ## Linting without running (`lint`)
 
-Some analysis code can't be run in CI: the data is private, too large or behind a VPN. `stataudit lint` reads `.py` and `.ipynb` files as a syntax tree, executes nothing and needs no data. It is fast enough for every pull request.
+Some analysis code can't be run in CI: the data is private, too large or behind a VPN. `stataudit lint` reads `.py` and `.ipynb` files as a syntax tree, executes nothing and needs no data, so it is fast enough for every pull request.
 
-| Rule | What it flags | Suggested fix |
-|---|---|---|
-| multiple tests, no correction | several hypothesis tests in one file and no `multipletests`, Holm, Bonferroni or FDR step | correct the family (Holm by default), or say which tests are confirmatory |
-| Student's t by default | `ttest_ind(...)` without `equal_var=False`, with no variance check on the same data | use Welch's t-test (`equal_var=False`) |
-| Pearson without a look | `pearsonr` with no plot or outlier check of the same variables | plot the data; report Spearman as well |
-| chi-square on a small table | `chi2_contingency` on a table that looks small or sparse | check expected counts; use Fisher's exact or a Monte Carlo test |
-| test shopping | the same arrays passed through 3 or more different tests | pick the test before looking at results; report all of them |
-| `p < 0.05` over many tests | significance decided by comparing many p-values to 0.05 in a loop | adjust the p-values first |
+| Rule | Name | Severity | Fires when |
+|---|---|---|---|
+| SA101 | `uncorrected-multiple-tests` | warn | 3 or more hypothesis-test calls, or a test inside a loop or comprehension, and no multiple-comparison correction in the file |
+| SA102 | `student-t-unchecked-variances` | warn | `ttest_ind` without `equal_var=False` (or a non-zero `trim`) and no `levene`/`bartlett`/`fligner` in the file |
+| SA103 | `pearson-unchecked` | warn | `pearsonr` and no scatter plot, outlier check or rank correlation in the file |
+| SA104 | `chi2-small-expected` | warn / info | `chi2_contingency` on a literal table that fails Cochran's rule (warn), or on a computed table whose expected counts are never inspected (info) |
+| SA105 | `test-shopping` | warn | the same data passed to 3 or more different test functions |
+| SA106 | `p-threshold-selection` | warn | `p < 0.05`-style comparisons where SA101's conditions hold |
+| SA107 | `normality-pretest` | info | a normality test in an `if` chooses which hypothesis test runs |
 
-Each finding has a rule id, the line, an explanation and the suggested fix. Lint findings are heuristics about code, not facts about data: `stataudit run` is the stronger check whenever you can run the analysis. The rules are in the same family as stat-lint's (see [How stataudit compares](#how-stataudit-compares)), but much simpler: they match patterns in one file and do no dataflow analysis.
+```text
+$ stataudit lint examples/04_many_tests.py
+stataudit lint — examples/04_many_tests.py
+────────────────────────────────────────────────────────────────────────
+⚠️ 2 warning(s), 0 note(s) (1 statistical test call(s) found)
+
+04_many_tests.py:27: SA101 uncorrected-multiple-tests [warn]
+    1 test call(s), 1 inside a loop or comprehension; no multiple-comparison correction (Holm, Bonferroni, FDR) in this file.
+    > res = stats.ttest_ind(variant, control, equal_var=False)
+    fix: Collect the p-values and adjust them, e.g. `statsmodels.stats.multitest.multipletests(pvals, method='holm')` or `scipy.stats.false_discovery_control(pvals)`, and report the adjusted values.
+
+04_many_tests.py:28: SA106 p-threshold-selection [warn]
+    p-values are compared with a fixed threshold (res.pvalue < 0.05) across 1 uncorrected test call(s) in a loop.
+    > flag = "*" if res.pvalue < 0.05 else ""
+    fix: Compare adjusted p-values (Holm or Benjamini-Hochberg) with the threshold, and report effect sizes with confidence intervals rather than a significant/non-significant split.
+```
+
+Suppress a finding with a comment on the reported line, `# stataudit: ignore` or `# stataudit: ignore[SA102, SA105]`; choose rules with `--select` / `--ignore`, or `lint_ignore` in `stataudit.toml`. `--list-rules` prints every rule with its fix, `--fail-on warn|info|never` (default `warn`) sets the exit code, and `--json` / `--md` write reports. Notebooks are linted as one program. Lint findings are heuristics about code, not facts about data: `stataudit run` is the stronger check whenever you can run the analysis. The rules are in the same family as stat-lint's (see [How stataudit compares](#how-stataudit-compares)) but much simpler: they match patterns within one file and do no dataflow analysis.
 
 ## Agent: fix and explain (experimental)
 
 Finding a fragile conclusion is half the job. The opt-in agent tries the other half, **proposing a corrected analysis**, and stataudit then checks the proposal the only way that counts: by running it. The agent is **off by default** and needs your own API key.
 
 <p align="center">
-  <img src="docs/assets/fix-loop.svg" alt="The fix agent. The model sees the script as text, the audit findings and a data summary (column names, dtypes and n; raw rows only with --share-data). It proposes a patch with read-only tools and a schema-checked submit; this step holds the API key and runs nothing. A static gate rejects patches that do not parse or that import os, subprocess, socket, shutil, ctypes or importlib, or use eval, exec, __import__ or open for writing. stataudit runs the patched script through the tracer in a subprocess with a timeout and no secrets, and accepts it only if the same questions are answered, the tests hold or improve and no new critical findings appear. Otherwise findings are fed back for up to two rounds; if nothing verifies, the plain audit report stands." width="880">
+  <img src="docs/assets/fix-loop.svg" alt="The fix agent. The model sees the script as text, the audit findings and data summaries (raw values only with --share-data). It proposes a patch with read-only tools and a schema-checked submit; this step holds the API key and runs nothing. A static gate rejects patches that do not parse or that add imports of os, subprocess, socket, shutil, ctypes or importlib, or calls such as eval, exec, __import__ or open for writing. stataudit runs the patched script through the tracer in a subprocess with a timeout and no secrets, and accepts it only if the same questions are answered, the tests hold or improve and no new critical findings appear. Otherwise the reasons are fed back for up to two rounds; if nothing verifies, the plain audit report stands." width="880">
 </p>
 
 ```bash
@@ -276,23 +319,24 @@ export STATAUDIT_LLM_PROVIDER=anthropic       # or openai (any OpenAI-compatible
 export STATAUDIT_LLM_MODEL=<model id>         # required; there is no default model
 export STATAUDIT_LLM_API_KEY=...
 
-stataudit fix analysis.py                     # prints a diff and before/after verdicts
-stataudit fix analysis.ipynb --rounds 2 --apply
-stataudit explain report.json                 # plain-language summary of a report
+stataudit fix examples/01_ttest_outliers.py               # diff + before/after verdicts; changes nothing
+stataudit fix examples/06_notebook.ipynb --rounds 3 --out fixed.ipynb
+stataudit explain examples/01_ttest_outliers.py           # plain-language summary
+stataudit explain examples/01_ttest_outliers.py --no-llm  # the deterministic summary, no model
 ```
 
-**`stataudit fix SCRIPT.py|NOTEBOOK.ipynb`**
+**`stataudit fix FILE`** (a `.py` script or `.ipynb` notebook)
 
-- **What the model sees.** The script, the audit findings as JSON, and a summary of the data: column names, dtypes and n. Not the raw rows, unless you pass `--share-data`. All of it is delimited in the prompt as untrusted data.
-- **What it can do.** Call read-only tools (read the script, show the findings, show the data summary) and submit one schema-validated patch. It can't write files, run code or reach the network.
-- **What stataudit checks.** The patch must parse and pass a static denylist: no imports of `os`, `subprocess`, `socket`, `shutil`, `ctypes` or `importlib`, no `eval`, `exec` or `__import__`, no `open(...)` for writing. Then stataudit runs the patched script **through the tracer, in a subprocess, with a timeout and an environment scrubbed of secret-looking variables**, and audits it again. The fix is accepted only if every question the original answered is still answered (same call sites, or an explicit replacement such as Welch for Student), every patched test holds or improves, and no new critical findings appear.
-- **What you get.** A unified diff plus a before/after verdict table. Files are changed only with `--apply`. If a round fails verification, the new findings go back to the model, for up to `--rounds` rounds (default 2). If nothing verifies, you get the normal audit report and no fix.
+- **What the model sees.** The script (a notebook as `# %% [cell N]` sections), stataudit's findings, and **summaries** of each traced input (n, missing values, mean, standard deviation) plus the columns and dtypes of CSV files the code names. Single observed values and raw rows only with `--share-data`. Everything is wrapped in delimiters as untrusted data.
+- **What it can do.** Call read-only tools (`read_script`, `show_findings`, `data_summary`) and submit one schema-validated fix. It can't write files, run code or reach the network.
+- **What stataudit checks.** The fix must parse and must not **add** denylisted constructs: imports such as `os`, `subprocess`, `socket`, `shutil`, `ctypes`, `importlib`, calls such as `eval`, `exec`, `__import__`, `open(...)` for writing. Then stataudit runs it **through the tracer, in a subprocess, with a timeout (`--timeout`, default 120 s) and every secret-looking environment variable removed**, and audits it again. It is accepted only if it runs to completion, every result the original audit judged is still answered (same data, the same unchanged line, or a replacement the model named), each of those holds or improved, no new critical finding appears, and at least one result improved.
+- **What you get.** A unified diff, a before/after table and the model's rationale, labelled as unverified prose. Files change only with `--apply` (overwrite) or `--out FILE`, and only for a verified fix. A rejected proposal goes back to the model with the reasons, for up to `--rounds` rounds (default 2). Exit code 0 for a verified fix or nothing to fix, 1 otherwise, 2 when no LLM is configured.
 
-A verified fix is evidence that the patched analysis passes stataudit's checks. It is not proof that the patch asks the question you meant to ask: switching from a t-test to Mann-Whitney changes the hypothesis from means to distributions, and the before/after table says so. Read the diff.
+A verified fix means stataudit's audit of the new analysis is better and every original question is still answered. It doesn't mean the new analysis is the right one for your study: switching from a t-test to Mann-Whitney changes the hypothesis from means to distributions. Read the diff. Run locally, `fix` executes the model's candidate on your machine: the environment is scrubbed and the denylist blocks the obvious escape hatches, but it is **not a sandbox**, so use it on your own analyses. For pull requests from others, use the split [agent workflow](#github-integration).
 
-**`stataudit explain`** writes a summary of the findings for a reader who isn't a statistician. It is grounded: every number in the model's text must appear in the findings JSON. If any number doesn't, the text is rejected and the deterministic summary is used instead.
+**`stataudit explain SOURCE`** writes a summary of the findings for a reader who isn't a statistician. SOURCE is a JSON report from `run`, `check-report` or `lint`, an analysis (audited first) or a report document (checked first). The text is grounded: every number in it must match a number in the findings, or the whole text is rejected and the deterministic summary is printed instead. Without an LLM configured, or with `--no-llm`, you get the deterministic summary.
 
-**Honest limits.** We have not benchmarked the fix agent, so we don't publish a success rate. Expect it to come back empty-handed on analyses whose problem is the study design rather than the test. Token use is reported with every run. Some models need provider-specific settings: OpenAI's `gpt-6-luna` only calls tools through Chat Completions with `STATAUDIT_LLM_REASONING_EFFORT=none`, and GPT-6 models reject `temperature` unless reasoning is off. Details are in [docs/AGENT.md](docs/AGENT.md).
+**Honest limits.** The agent is tested end to end with a scripted fake model; how often real models produce fixes that pass verification has **not been measured**. Problems that need a design decision (which tests form a family, whether an outlier is an error) can't be settled by rewriting code: example 04 is one. Token use is reported with every run. OpenAI's GPT-6 Luna only calls tools through Chat Completions with `STATAUDIT_LLM_REASONING_EFFORT=none`, and GPT-6 models reject `temperature` unless reasoning is off (stataudit sends none). Details are in [docs/AGENT.md](docs/AGENT.md).
 
 ## MCP server and web UI
 
@@ -300,10 +344,10 @@ A verified fix is evidence that the patched analysis passes stataudit's checks. 
 
 | Tool | What it does |
 |---|---|
-| `audit_script(path, alpha)` | Runs a local `.py` file under the tracer (in a subprocess, 120-second timeout, no shell) and returns the Markdown report. |
+| `audit_script(path, alpha)` | Runs a local `.py` or `.ipynb` file under the tracer (in a subprocess, 120-second timeout, no shell) and returns the Markdown report. |
 | `audit_test(test_name, data_json, alpha)` | Audits arrays passed as JSON, for example `{"a": [...], "b": [...], "options": {"equal_var": true}}`. |
-| `check_report(path, alpha)` | Runs `check-report` on a text, Markdown or HTML file. |
-| `lint_file(path)` | Runs `lint` on a `.py` or `.ipynb` file. |
+| `check_report(text \| path, alpha)` | Recomputes the reported results in a piece of text or a file. Executes nothing. |
+| `lint_file(path)` | Lints a `.py` or `.ipynb` file. Executes nothing. |
 
 ```json
 {
@@ -319,9 +363,9 @@ The server treats its inputs as data: it accepts only known test names and numer
 
 ## GitHub integration
 
-stataudit runs on pull requests as separate workflows, so that PR code and privileged tokens never share a job ([why](#security-model)). Each caller is a few lines pointing at a reusable workflow in this repository; `stataudit init` writes them for you. Pin `@v1.0.0`, or a full commit SHA if you want to be strict.
+stataudit runs on pull requests as separate workflows, so that PR code and privileged tokens never share a job ([why](#security-model)). Each caller is a few lines pointing at a reusable workflow in this repository; `stataudit init` writes them for you, and [`examples/workflows/`](examples/workflows) holds exactly what `stataudit init --agent` writes (a test keeps the two in sync). Pin `@v1.0.0`, or a full commit SHA if you want to be strict, and keep `stataudit-ref` the same.
 
-**`.github/workflows/stataudit.yml`** checks the PR. It is unprivileged, and it is where PR code runs.
+**`.github/workflows/stataudit.yml`** checks the pull request. It is unprivileged, and it is the only place PR code runs.
 
 ```yaml
 name: stataudit
@@ -343,19 +387,22 @@ jobs:
     with:
       stataudit-ref: v1.0.0
       python-version: "3.12"
-      # Installs what your analyses import; this runs PR code (unprivileged job).
-      install-command: 'pip install -r requirements.txt || true'
-      fail-on: never   # or "fragile" / "fails" to fail the check
+      # Installs what the analyses import (runs PR code, unprivileged job). numpy, scipy
+      # and pandas are already there.
+      install-command: ''
+      fail-on: never   # or "warn" / "fail" to fail the check
 ```
 
-The check job:
+The check job runs `stataudit ci`, which
 
-- runs `stataudit lint` on the `.py` and `.ipynb` files the PR changes;
-- runs `stataudit check-report` on changed `.md`, `.txt` and `.html` files that match `reports` in `stataudit.toml`;
-- runs `stataudit run` **only** on files matching `run` in `stataudit.toml`, because that executes them. Nothing is executed unless you list it;
-- writes the card to the job summary (so it shows up even on fork PRs) and uploads `result.json`, `card.md` and the PR number as an artifact.
+- lints the changed `.py` and `.ipynb` files that match `lint` in `stataudit.toml`;
+- runs `check-report` on the changed `.md`, `.txt`, `.rst` and `.html` files that match `reports`;
+- re-runs **every** analysis that matches `run`, changed or not (a data change can change a result). Nothing is executed unless you list it;
+- writes the card to the job summary (so it shows up even on fork PRs) and uploads the `stataudit-result` artifact (`result.json`, `card.md`, `pr_number`, `head_sha`).
 
-**`.github/workflows/stataudit-comment.yml`** posts the card. It is privileged and never runs PR code.
+The overall status is **fail** when an analysis does not hold or a reported result is a gross inconsistency or impossible, **warn** for fragile analyses, inconsistent results and lint warnings, and **pass** otherwise. `fail-on` (default `never`) decides whether the check itself fails.
+
+**`.github/workflows/stataudit-comment.yml`** posts the card. It is privileged and never checks out or runs PR code.
 
 ```yaml
 name: stataudit comment
@@ -373,16 +420,17 @@ jobs:
     permissions:
       contents: read
       actions: read          # download the artifact of the triggering run
-      pull-requests: write   # upsert the comment (and the optional label)
+      pull-requests: write   # upsert the comment and the label
     uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.0
     with:
       stataudit-ref: v1.0.0
+      labels: true
 ```
 
-It validates `result.json` strictly, re-renders the card from the validated data (the uploaded `card.md` is ignored), and creates or updates one sticky comment, found by a hidden marker. The card ends with an invisible `<!-- stataudit:data {...} -->` block (escaped, size-capped, built only from validated fields) so bots can read the verdict without parsing Markdown.
+It validates `result.json` strictly, re-renders the card from the validated data (the uploaded `card.md` is never posted), refuses unless the result and the PR's current head are the same commit, and creates or updates one comment marked `<!-- stataudit:card -->`, plus one label: `stataudit: pass`, `stataudit: warnings` or `stataudit: problems`. The card ends with an invisible `<!-- stataudit:data {...} -->` block (escaped, size-capped, built only from validated fields) that bots can read with `stataudit.carddata.parse_card_data`.
 
 <details>
-<summary><b><code>.github/workflows/stataudit-agent.yml</code> (optional, experimental): propose verified fixes</b></summary>
+<summary><b><code>.github/workflows/stataudit-agent.yml</code> (optional, experimental): verified fixes on the card</b></summary>
 
 ```yaml
 name: stataudit agent
@@ -409,17 +457,33 @@ jobs:
       llm-base-url: ${{ vars.STATAUDIT_LLM_BASE_URL }}
       llm-reasoning-effort: ${{ vars.STATAUDIT_LLM_REASONING_EFFORT }}
       python-version: "3.12"
-      install-command: 'pip install -r requirements.txt || true'
+      install-command: ''
       run-for: trusted   # or "everyone" (spends API credits on any fork PR)
     secrets:
       llm-api-key: ${{ secrets.STATAUDIT_LLM_API_KEY }}
+
+  comment:
+    needs: agent
+    if: needs.agent.outputs.verified == 'true'
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.0
+    with:
+      stataudit-ref: v1.0.0
+      # Trusted values: the PR number comes from the gate job (API data, no PR
+      # code ran there) and the artifact from this run's verify job.
+      pr-number: ${{ needs.agent.outputs.pr-number }}
+      artifact-run-id: ${{ github.run_id }}
+      labels: true
 ```
 
-Add a repository **secret** `STATAUDIT_LLM_API_KEY` and repository **variables** `STATAUDIT_LLM_PROVIDER` and `STATAUDIT_LLM_MODEL` (optional: `STATAUDIT_LLM_BASE_URL`, `STATAUDIT_LLM_REASONING_EFFORT`). The workflow has two jobs: a **propose** job that holds the key, reads the PR's files as data and never installs or runs them, and a **verify** job with no secrets that runs the patched script through the tracer. A fix that verifies is added to the card as a collapsible "suggested fix (verified)" diff.
+When the check finds an analysis that is fragile or does not hold, the agent workflow runs four jobs on separate VMs: **gate** decides whether to run (reads the API only); **propose** holds the key, checks the PR out as data and never installs or runs it (`stataudit agent propose`); **verify** has no secrets and runs the original and candidate analyses (`stataudit agent verify`); **comment** re-posts the card with an agent section ("Suggested fix (verified by re-running the audit)") and the diff. Set it up with a repository secret `STATAUDIT_LLM_API_KEY`, repository variables `STATAUDIT_LLM_PROVIDER` and `STATAUDIT_LLM_MODEL` (optional `STATAUDIT_LLM_BASE_URL`, `STATAUDIT_LLM_REASONING_EFFORT`), and `[agent] enabled = true` in `stataudit.toml` on the default branch. It runs only for pull requests by owners, members and collaborators or labelled `stataudit:agent`, unless you set `run-for: everyone`.
 
 </details>
 
-[`examples/workflows/`](examples/workflows) contains exactly what `stataudit init` generates, and a test keeps the two in sync.
+Because `workflow_run` workflows always run from the default branch, merge the workflow files there before the comment and agent workflows act on pull requests. A composite action (`uses: bhaskargurram-ai/stataudit@v1.0.0` with `command: ci | summary | comment | agent-propose | agent-verify`) is available for custom setups; see [docs/REFERENCE.md](docs/REFERENCE.md#composite-action-actionyml).
 
 ## Security model
 
@@ -429,10 +493,10 @@ Running PR code safely is the core problem. stataudit splits the work so that ca
   <img src="docs/assets/security-model.svg" alt="Four jobs and their capabilities. The check job runs on pull_request: it runs PR code with a read-only token and no secrets, and hands on result.json and card.md. The agent propose job holds the LLM API key, reads PR files as data and never runs PR code. The agent verify job runs the patched script with no secrets on a separate VM. The comment job holds a write token, never checks out PR code, validates result.json and re-renders the card. No job both runs PR code and holds a secret or a write token." width="880">
 </p>
 
-- **Untrusted code runs only in jobs without secrets.** The check job runs on `pull_request` with `contents: read`, `persist-credentials: false`, timeouts and a scrubbed environment. `stataudit run` only touches files you opted in with `run = [...]`; `lint` and `check-report` never execute anything.
-- **The LLM key never meets PR code.** The propose job reads files as data and never installs or runs them. The verify job, on a separate VM, has no secrets. Patches also pass a static denylist before they run, but the denylist is a speed bump, not the boundary: the boundary is that the job that runs them holds nothing worth stealing.
-- **The privileged comment job never checks out or executes PR code.** It treats the artifact as hostile: it validates the PR number and the `result.json` schema, re-renders the card itself and escapes all PR-derived text.
-- **No `${{ github.event.* }}` in `run:` steps, no `pull_request_target`,** and minimal `permissions:` everywhere. A test in this repository checks these invariants on every workflow.
+- **Untrusted code runs only in jobs without secrets.** The check job runs on `pull_request` with `contents: read`, no secrets and `persist-credentials: false`. stataudit itself is checked out from this repository at `stataudit-ref` and installed **before** any PR code runs, and its configuration is read from the base commit. Only files you opted in with `run = [...]` are executed; `lint` and `check-report` never execute anything.
+- **The LLM key never meets PR code.** The propose job checks the PR out as data and never installs or runs it. The verify job, on a separate VM, has no secrets. Candidates also pass a static denylist before they run, but the denylist is a filter, not the boundary: the boundary is that the job that runs them holds nothing worth stealing.
+- **The privileged comment job never checks out or executes PR code.** It treats the artifact as hostile: it validates the PR number and the `result.json` schema, checks the PR's current head SHA, re-renders the card itself, escapes all PR-derived text, only updates a card comment written by a bot, and warns on the card when the PR changes workflows or the stataudit configuration.
+- **No `pull_request_target`, no `${{ }}` expressions in `run:` scripts, no caches,** and minimal `permissions:` everywhere. [`tests/test_workflows.py`](tests/test_workflows.py) checks these invariants on every workflow.
 - **Prompt injection.** The deterministic path has nothing to inject into. Code, data, reports and docstrings reach an LLM only as delimited, untrusted data; the model has no write, exec or network tools; its output is schema-validated; and nothing it writes counts until stataudit has run and re-audited it.
 
 stataudit raises the bar; it is **not** a sandbox. A malicious PR can still tamper with its own results inside the unprivileged job, and `stataudit run` on your laptop runs the script with your permissions, like `python analysis.py` would. Read [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for the full threat model.
@@ -448,77 +512,115 @@ Different tools answer different questions. This is our best reading of each as 
 | Runs your analysis on your data | No | No | You call each function | Writes and runs its own code | **Yes, traces your own run** |
 | Checks assumptions per test | No | Checks whether the code checks them | Yes, one call at a time | If asked; varies by prompt | **Yes, automatically, on the data each test received** |
 | Computes alternatives, judges the conclusion | No | No | Provides the tests (Welch, robust SEs, …) | Sometimes | **Yes: holds / fragile / does not hold** |
-| Recomputes reported p-values from text | **Yes**: t, F, r, χ², z, Q | No | No | No | Yes: t, F, r, χ², z (no Q) |
+| Recomputes reported p-values from text | **Yes**: t, F, r, χ², z, Q | No | No | No | Yes: t, F, r, χ², z, Q, also R's output style |
 | Static analysis without data | No | **Yes, dataflow over its own IR (SIR)** | No | No | Yes, simpler single-file AST rules |
 | Multiple comparisons | No | Flags missing correction | Provides corrections | Varies | Holm across every traced p-value |
 | Uses an LLM | No | No | No | Yes, and it decides | Optional, and it never decides |
 | CI / pull requests | Not built in | Research prototype | n/a | Hosted chat | GitHub workflows and a PR comment |
 | Language | R (statcheck); text in any field | Python | Python | Mostly Python | Python: `scipy.stats`, statsmodels OLS |
 
-These tools are complementary. statcheck is the established tool for checking published articles and has been validated at scale (a validity study reported accuracy of roughly 96–99.9 % depending on settings); stataudit's `check-report` borrows the idea for analysis write-ups and does less (no Q tests, no tables). stat-lint's static analysis is more thorough than `stataudit lint`, which matches patterns in one file. pingouin and statsmodels give you every diagnostic stataudit uses and more, but you have to know which to call and what to conclude. LLM agents run analyses quickly, but nothing independent checks what they concluded. stataudit's own gaps: it sees only `scipy.stats` and statsmodels OLS calls (no R, no hand-computed tests, no mixed models), it cannot know your study design, and its agent is unbenchmarked.
+These tools are complementary. statcheck is the established tool for checking published articles and has been validated at scale (a validity study reported accuracy of roughly 96–99.9 % depending on settings); stataudit's `check-report` borrows the idea for analysis write-ups; it has not been validated on a corpus of articles, and it doesn't read tables. stat-lint's static analysis is more thorough than `stataudit lint`, which matches patterns in one file. pingouin and statsmodels give you every diagnostic stataudit uses and more, but you have to know which to call and what to conclude. LLM agents run analyses quickly, but nothing independent checks what they concluded. stataudit's own gaps: it sees only `scipy.stats` and statsmodels OLS calls (no R, no hand-computed tests, no mixed models), it cannot know your study design, and its agent is unbenchmarked.
 
 ## Configuration
 
-`stataudit.toml` at the repository root configures CI and the defaults for the CLI. `stataudit init` writes a commented starting point.
+`stataudit.toml` at the repository root (or `.stataudit.toml`, or `[tool.stataudit]` in `pyproject.toml`) configures `stataudit ci`. In CI it is read from the pull request's **base** commit, so a pull request cannot weaken its own check. Unknown keys are errors. This is what `stataudit init --agent` writes:
 
 <details open>
-<summary><b>All keys</b></summary>
+<summary><b><code>stataudit.toml</code></b></summary>
 
 ```toml
-alpha = 0.05                      # significance level used to judge conclusions
-fail-on = "fragile"               # fragile | fails | never
+alpha = 0.05
+fail_on = "fail"                    # never | warn | fail: when `stataudit ci` exits non-zero
 
-# Scripts and notebooks that CI may *execute* with `stataudit run`.
-# Opt-in on purpose: nothing runs unless it matches here.
-run = ["analysis/**/*.py", "notebooks/**/*.ipynb"]
+# Analyses re-run under the tracer on every pull request (this EXECUTES them, in
+# the unprivileged job). Opt-in: list the scripts and notebooks to run.
+run = ["analysis/**/*.py"]
 
-# Text checked with `stataudit check-report` (Markdown, plain text, HTML).
+# Reports whose APA-style results (t(28) = 2.20, p = .036, ...) are recomputed when they change.
 reports = ["reports/**/*.md"]
+
+# lint = ["**/*.py", "**/*.ipynb"]  # statically checked when they change
+# lint_ignore = ["SA107"]
+# timeout = 300                     # seconds per analysis
+# max_files = 50
+
+[agent]                             # verified fixes (stataudit-agent.yml); experimental
+enabled = true
+# max_fixes = 3                     # analyses per pull request
+# max_tool_calls = 12
+# share_data = false                # never send raw data rows to the LLM unless true
+
+# [llm]                             # the key only comes from STATAUDIT_LLM_API_KEY
+# provider = "anthropic"            # or "openai" for any OpenAI-compatible endpoint
+# model = ""
 ```
 
-`lint` runs on every changed `.py` and `.ipynb` file and needs no configuration.
-
 </details>
+
+| Key | Default | |
+|---|---|---|
+| `alpha` | `0.05` | significance level |
+| `fail_on` | `"fail"` | `never` \| `warn` \| `fail`: when `stataudit ci` exits non-zero |
+| `run` | `[]` | analyses executed in CI (opt-in) |
+| `reports` | `["**/*.md", "**/*.txt", "**/*.html", "**/*.htm"]` | checked with `check-report` when changed (`init` writes `["reports/**/*.md"]`) |
+| `lint` | `["**/*.py", "**/*.ipynb"]` | linted when changed |
+| `lint_ignore` | `[]` | rule ids to skip |
+| `timeout` | `300` | seconds per executed analysis |
+| `max_files` | `50` | per category per run |
+| `[agent]` `enabled`, `max_fixes`, `max_tool_calls`, `share_data` | `false`, `3`, `12`, `false` | the agent workflow |
+| `[llm]` `provider`, `model`, `base_url` | | fallbacks for `STATAUDIT_LLM_*`; the API key is never read from a file |
 
 **Environment variables (agent only)**
 
 | Variable | Purpose |
 |---|---|
 | `STATAUDIT_LLM_PROVIDER` | `anthropic` (Messages API) or `openai` (any OpenAI-compatible Chat Completions endpoint) |
-| `STATAUDIT_LLM_API_KEY` | API key. Never read from config files, and stripped from every subprocess. |
+| `STATAUDIT_LLM_API_KEY` | API key. Only read from the environment, and stripped from every subprocess. |
 | `STATAUDIT_LLM_MODEL` | Model id. **Required**; there is no default. |
-| `STATAUDIT_LLM_BASE_URL` | Optional custom endpoint |
-| `STATAUDIT_LLM_REASONING_EFFORT` | Optional reasoning effort, passed through to the provider (for example `none` for `gpt-6-luna` tool calls) |
+| `STATAUDIT_LLM_BASE_URL` | Optional endpoint (a local server needs no key) |
+| `STATAUDIT_LLM_REASONING_EFFORT` | Optional, OpenAI-compatible only: sent as `reasoning_effort` (`none` for GPT-6 Luna tool calls) |
+
+Generic names such as `LLM_API_KEY` are deliberately not read.
 
 ## CLI reference
 
 ```text
-stataudit run          SCRIPT.py|NOTEBOOK.ipynb [-- ARGS...] [report options] [--timeout 300] [--show-output]
-stataudit check-report FILE [report options]
-stataudit lint         FILE... [--json FILE]
+stataudit run          FILE.py|FILE.ipynb [-- ARGS...] [report options] [--timeout 300] [--show-output]
 stataudit check-data   DATA.csv --test NAME [--value-col C] [--group-col C] [--x-col C] [--y-col C]
                        [--popmean M] [--welch] [--sep S] [report options]
-stataudit fix          SCRIPT.py|NOTEBOOK.ipynb [--rounds 2] [--share-data] [--apply]
-stataudit explain      REPORT.json
-stataudit init         [--agent] [--force]
+stataudit check-report FILE... [--alpha A] [--fail-on inconsistent|gross|never] [--json F] [--md F] [--html F] [-v]
+stataudit lint         FILE... [--select IDS] [--ignore IDS] [--fail-on warn|info|never] [--json F] [--md F] [-v]
+                       [--list-rules]
+stataudit fix          FILE [--rounds 2] [--apply] [--out F] [--json F] [--md F] [--share-data] [--timeout 120]
+                       [--max-tool-calls 12] [--alpha A] [--config F]
+stataudit explain      SOURCE [--out F] [--json F] [--no-llm] [--alpha A] [--config F]
+stataudit init         [--repo DIR] [--agent] [--force] [--ref REF] [--install-command CMD]
+stataudit ci           [--repo DIR] [--base REV] [--head REV] [--files PATH]... [--all] [--config F]
+                       [--out-dir DIR] [--fail-on config|never|warn|fail] [--pr N]
+stataudit summary      --json result.json [--out F]
+stataudit comment      --json result.json [--pr N] [--repo owner/name] [--expect-head-sha SHA] [--labels] [--dry-run]
+stataudit agent propose | agent verify      (the agent workflow's two CI steps)
 stataudit ui           [--host 127.0.0.1] [--port 8765]
 stataudit mcp          (same as the stataudit-mcp command)
 ```
 
-| Command | What it does |
-|---|---|
-| `run` | Executes a script or notebook under the tracer and audits every test it performs. |
-| `check-report` | Recomputes p-values for APA-style results in text and flags inconsistencies. Executes nothing. |
-| `lint` | Static rules over `.py` / `.ipynb` files. Executes nothing. |
-| `check-data` | Runs one test on columns of a CSV and audits it, without a script. |
-| `fix` | Experimental agent: proposes a corrected analysis and verifies it by running it. Writes files only with `--apply`. |
-| `explain` | Experimental agent: plain-language summary, with every number checked against the findings. |
-| `init` | Writes the caller workflows and a commented `stataudit.toml`. |
-| `ui` | Local web UI. |
-| `mcp` | MCP server over stdio. |
+| Command | What it does | Executes code? |
+|---|---|---|
+| `run` | runs a script or notebook under the tracer and audits every test on its actual data | yes, your analysis |
+| `check-data` | runs one test on columns of a CSV and audits it | no |
+| `check-report` | recomputes the p-values of APA-style results in text | no |
+| `lint` | static rules over `.py` / `.ipynb` files | no |
+| `fix` | experimental: an LLM proposes a corrected analysis; stataudit verifies it by re-running it | yes |
+| `explain` | experimental: plain-language summary, grounded in the findings | only if SOURCE is an analysis |
+| `init` | writes the caller workflows and a commented `stataudit.toml` | no |
+| `ci` | checks what a pull request changed; writes `result.json` and `card.md` | yes, files under `run` |
+| `summary` | renders the card into the GitHub job summary | no |
+| `comment` | validates `result.json` and upserts the PR comment (privileged job) | no |
+| `agent propose` / `agent verify` | the agent's two CI steps | propose: no; verify: yes |
+| `ui`, `mcp` | local web UI; MCP server over stdio | `audit_script` only |
 
 <details>
-<summary><b>Report options</b> (<code>run</code>, <code>check-data</code>, <code>check-report</code>)</summary>
+<summary><b>Report options</b> (<code>run</code>, <code>check-data</code>)</summary>
 
 | Option | Purpose |
 |---|---|
@@ -531,7 +633,7 @@ stataudit mcp          (same as the stataudit-mcp command)
 | `--color/--no-color` | force or disable ANSI colours |
 | `-v`, `--verbose` | show details for clean results too |
 
-You can also run `python -m stataudit …`.
+You can also run `python -m stataudit …`. Every option, the JSON formats and the card's data block are documented in [docs/REFERENCE.md](docs/REFERENCE.md).
 
 </details>
 
@@ -561,7 +663,7 @@ No. Tracing, auditing, alternatives, verdicts, `check-report` and `lint` are det
 <details>
 <summary><b>Does my data leave my machine?</b></summary>
 
-Not unless you use the agent. `run`, `check-report`, `lint`, the web UI and the MCP server work locally. `fix` sends the script, the findings and a data summary (column names, dtypes, n) to the LLM provider you configure; raw rows only with `--share-data`.
+Not unless you use the agent. `run`, `check-report`, `lint`, the web UI and the MCP server work locally. `fix` and `explain` send the script and the findings, including summaries of the data (n, missing values, mean, standard deviation, CSV column names and dtypes), to the LLM provider you configure. Raw values only with `--share-data`; in CI, only with `[agent] share_data = true`.
 
 </details>
 
@@ -586,7 +688,7 @@ Only Python is traced today. `check-report` works on any text, whatever produced
 - Assumption checks have little power at small n and too much at very large n. stataudit reports evidence (skewness, variance ratios, Cook's distance) next to p-values for that reason.
 - Holm-Bonferroni treats every traced p-value as one family. If your design says otherwise, read the multiplicity section with that in mind.
 - Multi-dimensional calls (`axis=1` on 2-D arrays) are recorded but not audited.
-- `check-report` reads sentences, not tables, and can't recognise deliberately adjusted p-values unless the text says so.
+- `check-report` reads sentences, not table cells, and only checks that a p-value the text calls corrected is not smaller than the uncorrected one.
 - `lint` is pattern-based and single-file; it misses problems that need dataflow across files and can flag code that is fine.
 - The agent is experimental and unbenchmarked. A verified fix passes stataudit's checks; it can still change the question being asked.
 
@@ -594,7 +696,7 @@ Only Python is traced today. `check-report` works on any text, whatever produced
 
 - More tests: logistic and Poisson regression, mixed models, survival analysis (log-rank, Cox)
 - R support: tracing `t.test`, `cor.test` and `lm` through an R bootstrap
-- `check-report` for tables and Q statistics
+- `check-report` for results in tables
 - A Jupyter extension that shows verdicts under the cell that ran the test
 - Post-hoc procedures (Games-Howell) and FDR control as an alternative to Holm
 - Bootstrap confidence intervals for effect sizes

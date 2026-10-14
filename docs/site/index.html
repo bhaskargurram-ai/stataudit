@@ -410,24 +410,24 @@
       <div class="split">
         <div>
           <h3><code>stataudit check-report</code></h3>
-          <p class="note" style="margin:0 0 16px">Recomputes p from APA-style results in Markdown, text, HTML or PDF, in the spirit of statcheck, and flags inconsistencies, including the gross ones that flip significance.</p>
+          <p class="note" style="margin:0 0 16px">Recomputes p from APA-style results (t, F, r, χ², z, Q) in Markdown, text, HTML or PDF, in the spirit of statcheck, and flags inconsistencies, including the gross ones that flip significance. Real output for <code>examples/reports/results.md</code>: 5 consistent, 1 inconsistent, 2 gross.</p>
           <div class="tblwrap"><table class="tbl">
-            <thead><tr><th scope="col">Reported</th><th scope="col">Recomputed</th><th scope="col">Result</th></tr></thead>
+            <thead><tr><th scope="col">Reported</th><th scope="col"><abbr title="recomputed p-value">p</abbr></th><th scope="col">Result</th></tr></thead>
             <tbody>
-              <tr><td>t(28) = 2.20, p = .04</td><td class="n">0.036</td><td><span class="chip ok">consistent</span></td></tr>
-              <tr><td>z = 2.43, p = .03</td><td class="n">0.015</td><td><span class="chip warn">inconsistent</span></td></tr>
-              <tr><td>F(2, 45) = 3.10, p = .04</td><td class="n">0.055</td><td><span class="chip bad">gross</span></td></tr>
-              <tr><td>r(48) = .21, p = .01</td><td class="n">0.143</td><td><span class="chip bad">gross</span></td></tr>
+              <tr><td>t(72) = 2.31, p = .024</td><td class="n">0.0238</td><td><span class="chip ok">consistent</span></td></tr>
+              <tr><td>t(35) = 2.04, p = .03</td><td class="n">0.049</td><td><span class="chip warn">inconsistent</span></td></tr>
+              <tr><td>F(2, 69) = 2.95, p = .03</td><td class="n">0.059</td><td><span class="chip bad">gross</span></td></tr>
+              <tr><td>z = 1.70, p &lt; .05</td><td class="n">0.0891</td><td><span class="chip bad">gross</span></td></tr>
             </tbody>
           </table></div>
         </div>
         <div>
           <h3><code>stataudit lint</code></h3>
-          <p class="note" style="margin:0 0 16px">Reads <code>.py</code> and <code>.ipynb</code> as a syntax tree. Fast, needs no data, and each finding comes with a suggested fix.</p>
+          <p class="note" style="margin:0 0 16px">Reads <code>.py</code> and <code>.ipynb</code> as a syntax tree. Fast, needs no data, and each finding comes with a suggested fix. Silence one with <code># stataudit: ignore[SA102]</code>.</p>
           <ul class="points">
-            <li><strong>Many tests, no correction.</strong> Several p-values and no Holm, Bonferroni or FDR step.</li>
-            <li><strong>Student's t by default.</strong> <code>ttest_ind</code> without <code>equal_var=False</code> on unchecked data.</li>
-            <li><strong>Pearson without a look,</strong> chi-square on small tables, and the same arrays put through three or more tests.</li>
+            <li><strong>SA101, SA106: many tests, no correction,</strong> and results picked by <code>p &lt; 0.05</code> among them.</li>
+            <li><strong>SA102: Student's t by default.</strong> <code>ttest_ind</code> without <code>equal_var=False</code> and no variance check.</li>
+            <li><strong>SA103–SA105, SA107:</strong> Pearson without a look, chi-square on small tables, test shopping, and normality pre-tests that pick the test.</li>
           </ul>
         </div>
       </div>
@@ -443,12 +443,12 @@
       </figure>
       <div class="split">
         <ul class="points">
-          <li><strong>Your rows stay home.</strong> The model sees the script, the findings and column names, dtypes and n. Raw data only with <code>--share-data</code>.</li>
-          <li><strong>Verified, then shown.</strong> You get a diff and a before/after verdict table. Nothing is written without <code>--apply</code>.</li>
+          <li><strong>Your rows stay home.</strong> The model sees the script, the findings and summaries of the data (n, mean, sd, CSV columns). Raw values only with <code>--share-data</code>.</li>
+          <li><strong>Verified, then shown.</strong> You get a diff and a before/after verdict table. Nothing is written without <code>--apply</code> or <code>--out</code>.</li>
           <li><strong>Grounded explanations.</strong> <code>stataudit explain</code> rejects any summary containing a number that isn't in the findings.</li>
         </ul>
         <ul class="points warn">
-          <li><strong>Unbenchmarked.</strong> We don't publish a success rate because we haven't measured one. Expect it to find nothing when the problem is the study design.</li>
+          <li><strong>Unbenchmarked.</strong> It is tested end to end with a scripted fake model; how often real models produce verified fixes hasn't been measured. Expect nothing when the problem is the study design.</li>
           <li><strong>A verified fix can change the question.</strong> Mann-Whitney compares distributions, not means. Read the diff.</li>
         </ul>
       </div>
@@ -487,15 +487,15 @@ pip install "git+https://github.com/bhaskargurram-ai/stataudit@v1.0.0"</code></p
         </li>
         <li>
           <h3>Audit an analysis</h3>
-          <p>Scripts and notebooks run as they are. Exit code 1 when a conclusion is fragile or doesn't hold.</p>
-          <pre><code>stataudit run analysis.py --html report.html
-stataudit run notebook.ipynb
-stataudit check-report results.md
-stataudit lint analysis.py</code></pre>
+          <p>Scripts and notebooks run as they are; notebook findings point at <code>cell N, line M</code>. Exit code 1 when a conclusion is fragile or doesn't hold.</p>
+          <pre><code>stataudit run examples/01_ttest_outliers.py --html report.html
+stataudit run examples/06_notebook.ipynb
+stataudit check-report examples/reports/results.md
+stataudit lint examples/04_many_tests.py</code></pre>
         </li>
         <li>
           <h3>Add it to pull requests</h3>
-          <p>From your repository root. It writes the caller workflows and a commented <code>stataudit.toml</code>, and won't overwrite files without <code>--force</code>.</p>
+          <p>From your repository root. It writes the caller workflows and a commented <code>stataudit.toml</code>, and won't overwrite files without <code>--force</code>. The workflow comment job and the agent run from the default branch, so merge the files there first.</p>
           <pre><code>stataudit init
 stataudit init --agent   <span class="c"># with the fix agent</span></code></pre>
           <details>
@@ -519,8 +519,10 @@ jobs:
     with:
       stataudit-ref: v1.0.0
       python-version: "3.12"
-      install-command: 'pip install -r requirements.txt || true'
-      fail-on: never <span class="c">  # or "fragile" / "fails" to fail the check</span></code></pre>
+<span class="c">      # Installs what the analyses import (runs PR code, unprivileged job). numpy, scipy</span>
+<span class="c">      # and pandas are already there.</span>
+      install-command: ''
+      fail-on: never<span class="c">   # or "warn" / "fail" to fail the check</span></code></pre>
           </details>
           <details>
             <summary><code>.github/workflows/stataudit-comment.yml</code>: post the card</summary>
@@ -528,7 +530,7 @@ jobs:
 
 on:
   workflow_run:
-    workflows: ["stataudit"] <span class="c">  # must match the `name:` of stataudit.yml</span>
+    workflows: ["stataudit"]<span class="c">   # must match the `name:` of stataudit.yml</span>
     types: [completed]
 
 permissions: {}
@@ -538,18 +540,39 @@ jobs:
     if: github.event.workflow_run.event == 'pull_request' &amp;&amp; github.event.workflow_run.conclusion != 'cancelled'
     permissions:
       contents: read
-      actions: read        <span class="c">  # download the artifact of the triggering run</span>
-      pull-requests: write <span class="c">  # upsert the comment</span>
+      actions: read<span class="c">          # download the artifact of the triggering run</span>
+      pull-requests: write<span class="c">   # upsert the comment and the label</span>
     uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.0
     with:
-      stataudit-ref: v1.0.0</code></pre>
+      stataudit-ref: v1.0.0
+      labels: true</code></pre>
           </details>
           <details>
-            <summary><code>stataudit.toml</code>: what CI may run</summary>
+            <summary><code>stataudit.toml</code>: what CI may run (as <code>init --agent</code> writes it)</summary>
 <pre><code>alpha = 0.05
-fail-on = "fragile"            <span class="c"># fragile | fails | never</span>
-run = ["analysis/**/*.py"]     <span class="c"># executed: opt-in</span>
-reports = ["reports/**/*.md"]  <span class="c"># checked with check-report</span></code></pre>
+fail_on = "fail"<span class="c">                    # never | warn | fail: when `stataudit ci` exits non-zero</span>
+
+<span class="c"># Analyses re-run under the tracer on every pull request (this EXECUTES them, in</span>
+<span class="c"># the unprivileged job). Opt-in: list the scripts and notebooks to run.</span>
+run = ["analysis/**/*.py"]
+
+<span class="c"># Reports whose APA-style results (t(28) = 2.20, p = .036, ...) are recomputed when they change.</span>
+reports = ["reports/**/*.md"]
+
+<span class="c"># lint = ["**/*.py", "**/*.ipynb"]  # statically checked when they change</span>
+<span class="c"># lint_ignore = ["SA107"]</span>
+<span class="c"># timeout = 300<span class="c">                     # seconds per analysis</span></span>
+<span class="c"># max_files = 50</span>
+
+[agent]<span class="c">                             # verified fixes (stataudit-agent.yml); experimental</span>
+enabled = true
+<span class="c"># max_fixes = 3<span class="c">                     # analyses per pull request</span></span>
+<span class="c"># max_tool_calls = 12</span>
+<span class="c"># share_data = false<span class="c">                # never send raw data rows to the LLM unless true</span></span>
+
+<span class="c"># [llm]<span class="c">                             # the key only comes from STATAUDIT_LLM_API_KEY</span></span>
+<span class="c"># provider = "anthropic"<span class="c">            # or "openai" for any OpenAI-compatible endpoint</span></span>
+<span class="c"># model = ""</span></code></pre>
           </details>
         </li>
       </ol>
