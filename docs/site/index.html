@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stataudit: does the conclusion survive?</title>
+<meta name="description" content="stataudit runs your analysis, records every statistical test it performs, checks each test's assumptions on the data it actually received, computes the robust alternatives and tells you whether the conclusion still holds.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cline x1='46' y1='46' x2='58' y2='58' stroke='%23161a22' stroke-width='8' stroke-linecap='round'/%3E%3Ccircle cx='28' cy='28' r='22' fill='%23e9eefc' stroke='%23161a22' stroke-width='5.5'/%3E%3Cpath d='M11 37 C19 37 21 15 27 15 C33 15 35 37 45 37' fill='none' stroke='%23161a22' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='35' y1='14' x2='35' y2='41' stroke='%233150c0' stroke-width='3' stroke-dasharray='3 3'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --paper: #f4f5f8;
+    --surface: #ffffff;
+    --ink: #161a22;
+    --muted: #576070;
+    --rule: #d8dce4;
+    --accent: #3150c0;
+    --accent-soft: #e9eefc;
+    --ok: #1a7f37;
+    --ok-soft: #e3f4e8;
+    --warn: #8a5d00;
+    --warn-soft: #fff3d1;
+    --bad: #c62828;
+    --bad-soft: #fde9e7;
+    --dot: #4b5563;
+    --code-bg: #eceef3;
+    --focus: #3150c0;
+    --serif: "Iowan Old Style", "Charter", "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+    --sans: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0d1016;
+      --surface: #151a22;
+      --ink: #e8ebf1;
+      --muted: #9aa3b2;
+      --rule: #2b323d;
+      --accent: #8fa8ff;
+      --accent-soft: #1d2648;
+      --ok: #57c27a;
+      --ok-soft: #15301f;
+      --warn: #e0b04a;
+      --warn-soft: #362b12;
+      --bad: #ff7b72;
+      --bad-soft: #3a1a1a;
+      --dot: #aeb6c0;
+      --code-bg: #1c222c;
+      --focus: #8fa8ff;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-padding-top: 24px; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 17px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
+  a:hover { text-decoration-color: var(--accent); }
+  a:focus-visible, .btn:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 6px; }
+  code, pre { font-family: var(--mono); font-size: 0.88em; }
+  :not(pre) > code { background: var(--code-bg); padding: 0.1em 0.38em; border-radius: 5px; }
+  img { max-width: 100%; height: auto; display: block; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 600px) { .wrap { padding: 0 16px; } }
+
+  /* header */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 22px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 19px; letter-spacing: -0.01em; text-decoration: none; }
+  .brand svg { width: 30px; height: 30px; flex: none; }
+  .brand .lens { fill: var(--accent-soft); stroke: var(--ink); }
+  .brand .handle, .brand .curve { stroke: var(--ink); }
+  .brand .alpha { stroke: var(--accent); }
+  nav ul { list-style: none; display: flex; gap: 22px; margin: 0; padding: 0; font-size: 15px; }
+  nav a { text-decoration: none; color: var(--muted); }
+  nav a:hover { color: var(--ink); }
+  @media (max-width: 760px) { nav li:not(.gh) { display: none; } }
+
+  /* hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 56px; align-items: center; padding-block: 48px 72px; }
+  @media (max-width: 920px) { .hero { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-block: 24px 56px; } }
+  h1, h2 { font-family: var(--serif); font-weight: 700; }
+  h1 {
+    font-size: clamp(2.6rem, 6vw, 4.4rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 24px;
+    text-wrap: balance;
+  }
+  .lede { font-size: 1.18rem; line-height: 1.55; color: var(--muted); max-width: 32em; margin: 0 0 32px; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 20px; border-radius: 10px; font-weight: 650; font-size: 16px; text-decoration: none;
+    border: 1.5px solid var(--ink);
+  }
+  .btn.primary { background: var(--ink); color: var(--paper); }
+  .btn.primary:hover { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+  .btn.ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .status { margin: 20px 0 0; font-size: 14px; color: var(--muted); }
+
+  /* the hero figure: one data set, four analyses, one alpha line */
+  .fig {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .fig-code { padding: 18px 22px 16px; border-bottom: 1px solid var(--rule); font-size: 14px; color: var(--muted); }
+  .fig-code pre { margin: 6px 0 0; padding: 0; border: 0; background: none; font-size: 13.5px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .fig-code .res { color: var(--bad); font-weight: 650; font-family: var(--mono); font-size: 13px; margin-top: 2px; }
+  .scale { padding: 18px 22px 8px; }
+  .scale-head { display: grid; grid-template-columns: var(--lab) minmax(0, 1fr) var(--val); gap: var(--gap); font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+  .zones { position: relative; height: 18px; }
+  .zones span { position: absolute; top: 0; font-weight: 650; white-space: nowrap; }
+  .zones .z-sig { left: 0; width: var(--a); text-align: center; color: var(--bad); }
+  .zones .z-ns { left: var(--a); right: 0; text-align: center; }
+  .fig { --lab: 160px; --val: 72px; --gap: 12px; }
+  .rows { position: relative; }
+  .rows::before, .rows::after { content: ""; position: absolute; top: 0; bottom: 0; pointer-events: none; }
+  .rows::before { left: calc(var(--lab) + var(--gap)); width: calc((100% - var(--lab) - var(--val) - 2 * var(--gap)) * var(--af)); background: var(--bad-soft); opacity: .8; }
+  .rows::after { left: calc(var(--lab) + var(--gap) + (100% - var(--lab) - var(--val) - 2 * var(--gap)) * var(--af)); border-left: 1.5px dashed var(--ink); }
+  .row { position: relative; z-index: 1; }
+  .row { display: grid; grid-template-columns: var(--lab) minmax(0, 1fr) var(--val); gap: var(--gap); align-items: center; padding: 9px 0; }
+  .row .lab { font-size: 14.5px; font-weight: 600; line-height: 1.25; }
+  .row .lab small { display: block; font-weight: 400; font-size: 12.5px; color: var(--muted); }
+  .track { position: relative; height: 22px; }
+  .track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--rule); }
+  .dot { position: absolute; top: 50%; left: var(--x); width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; }
+  .dot.ran { background: var(--bad); }
+  .dot.alt { background: var(--surface); border: 2.2px solid var(--ink); }
+  .pv { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
+  .pv.bad { color: var(--bad); font-weight: 650; }
+  .axis { display: grid; grid-template-columns: var(--lab) minmax(0, 1fr) var(--val); gap: var(--gap); font-size: 12px; color: var(--muted); padding-bottom: 6px; }
+  .ticks { position: relative; height: 34px; border-top: 1.2px solid var(--muted); }
+  .ticks span { position: absolute; top: 4px; transform: translateX(-50%); font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
+  .ticks span.a { top: 18px; font-family: var(--sans); font-weight: 650; color: var(--ink); }
+  .ticks span.end { transform: translateX(-100%); }
+  .fig-foot .ft { flex: 1 1 14em; }
+  .fig-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 20px 18px; font-size: 14px; border-top: 1px solid var(--rule); font-size: 14.5px; color: var(--muted); }
+  @media (max-width: 520px) {
+    .scale, .fig-code, .fig-foot { padding-left: 14px; padding-right: 14px; }
+    .fig { --lab: 122px; --val: 58px; --gap: 8px; }
+    .row .lab { font-size: 13.5px; }
+    .ticks span:not(.a) { font-size: 10.5px; }
+  }
+
+  .chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 650; white-space: nowrap; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+
+  /* sections */
+  section { padding: 72px 0; border-top: 1px solid var(--rule); }
+  @media (max-width: 600px) { section { padding: 52px 0; } }
+  h2 { font-size: clamp(1.75rem, 3.4vw, 2.4rem); line-height: 1.15; letter-spacing: -0.015em; margin: 0 0 16px; max-width: 24em; text-wrap: balance; }
+  h3 { font-size: 1.08rem; line-height: 1.35; margin: 0 0 6px; font-weight: 700; }
+  .intro { color: var(--muted); max-width: 40em; margin: 0 0 36px; font-size: 1.06rem; }
+  .intro strong { color: var(--ink); font-weight: 600; }
+
+  figure { margin: 0; }
+  figcaption { color: var(--muted); font-size: 14.5px; margin-top: 12px; max-width: 46em; }
+  .diagram { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 14px; }
+  .diagram img { width: 100%; min-width: 760px; }
+  .shot { background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; padding: 14px; max-width: 820px; }
+  .shot img { border-radius: 8px; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 32px; margin-top: 40px; counter-reset: st; }
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .grid > div { padding: 20px 0; border-top: 1px solid var(--rule); }
+  .grid.steps > div { counter-increment: st; }
+  .grid.steps h3::before { content: counter(st); display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 10px; border-radius: 50%; border: 1.3px solid var(--accent); color: var(--accent); font-size: 13px; font-weight: 700; background: var(--accent-soft); vertical-align: 1px; }
+  .grid p { margin: 0; color: var(--muted); font-size: 16px; }
+
+  /* the examples ledger */
+  .ledger { list-style: none; margin: 0 0 48px; padding: 0; border-top: 1px solid var(--rule); }
+  .ledger li { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 2fr) 9em; gap: 20px; padding: 18px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+  .ledger .q { font-family: var(--serif); font-size: 1.12rem; line-height: 1.3; }
+  .ledger .q code { display: block; font-size: 12.5px; color: var(--muted); background: none; padding: 0; margin-top: 4px; }
+  .ledger .said, .ledger .found { font-size: 15px; color: var(--muted); }
+  .ledger .said b, .ledger .found b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ledger .lbl { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
+  .ledger .v { justify-self: end; }
+  @media (max-width: 860px) {
+    .ledger li { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; }
+    .ledger .q { grid-column: 1; }
+    .ledger .v { grid-column: 2; grid-row: 1; }
+    .ledger .said, .ledger .found { grid-column: 1 / -1; }
+  }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; margin-top: 40px; }
+  @media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
+  .points { list-style: none; margin: 0; padding: 0; }
+  .points li { padding: 14px 0 14px 28px; border-top: 1px solid var(--rule); position: relative; color: var(--muted); }
+  .points li strong { color: var(--ink); font-weight: 650; }
+  .points li::before { content: ""; position: absolute; left: 4px; top: 23px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  .points.warn li::before { background: var(--warn); }
+
+  /* check-report sample */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  .tbl th { text-align: left; font-weight: 600; color: var(--muted); font-size: 13px; padding: 8px 10px; border-bottom: 1px solid var(--rule); }
+  .tbl td { padding: 10px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  .tbl td:first-child { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+  .tblwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tbl td.n { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 520px) { .tbl th, .tbl td { padding-left: 6px; padding-right: 6px; } .tbl td:first-child { font-size: 12px; } }
+  .note { color: var(--muted); font-size: 14.5px; margin: 14px 0 0; }
+
+  /* quick start */
+  ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; max-width: 780px; }
+  ol.steps > li { counter-increment: s; position: relative; padding: 0 0 36px 56px; }
+  ol.steps > li::before {
+    content: counter(s); position: absolute; left: 0; top: -2px;
+    width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--ink);
+    display: grid; place-items: center; font-weight: 750; font-size: 15px;
+  }
+  ol.steps > li:not(:last-child)::after { content: ""; position: absolute; left: 17px; top: 40px; bottom: 8px; width: 1.5px; background: var(--rule); }
+  ol.steps p { margin: 0 0 12px; color: var(--muted); }
+  @media (max-width: 520px) { ol.steps > li { padding-left: 46px; } }
+  pre {
+    margin: 0 0 12px; padding: 16px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--rule);
+    overflow-x: auto; line-height: 1.55; font-size: 14px;
+  }
+  pre .c { color: var(--muted); }
+  details { border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); margin: 0 0 10px; }
+  summary { cursor: pointer; padding: 12px 16px; font-weight: 650; font-size: 15px; }
+  summary code { font-weight: 500; overflow-wrap: anywhere; }
+  details pre { margin: 0 12px 12px; border: none; background: var(--code-bg); }
+  details[open] summary { border-bottom: 1px solid var(--rule); margin-bottom: 12px; }
+
+  footer { border-top: 1px solid var(--rule); padding: 40px 0 56px; color: var(--muted); font-size: 15px; }
+  .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; }
+  .foot ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+
+  /* the one moment of motion: the alternatives leave the Student t-test's p-value and settle where they really are */
+  @media (prefers-reduced-motion: no-preference) {
+    .dot.alt { animation: settle 1100ms cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(350ms + var(--i) * 160ms); }
+    .pv.alt { animation: appear 400ms ease-out both; animation-delay: calc(1100ms + var(--i) * 160ms); }
+    .fig-foot .chip { animation: appear 400ms ease-out 1750ms both; }
+    @keyframes settle { from { left: var(--x0); opacity: 0.2; } to { left: var(--x); opacity: 1; } }
+    @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap top">
+  <a class="brand" href="./" aria-label="stataudit home">
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <line class="handle" x1="46" y1="46" x2="58" y2="58" stroke-width="8" stroke-linecap="round"/>
+      <circle class="lens" cx="28" cy="28" r="22" stroke-width="5.5"/>
+      <path class="curve" d="M11 37 C19 37 21 15 27 15 C33 15 35 37 45 37" fill="none" stroke-width="3.5" stroke-linecap="round"/>
+      <line class="alpha" x1="35" y1="14" x2="35" y2="41" stroke-width="3" stroke-dasharray="3 3"/>
+    </svg>
+    stataudit
+  </a>
+  <nav aria-label="Sections">
+    <ul>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#examples">Examples</a></li>
+      <li><a href="#agent">Agent</a></li>
+      <li><a href="#start">Quick start</a></li>
+      <li class="gh"><a href="https://github.com/bhaskargurram-ai/stataudit">GitHub</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <h1>Does the conclusion survive?</h1>
+      <p class="lede">stataudit runs your analysis, records every statistical test it performs and checks each one's assumptions <strong>on the data it actually received</strong>. When a check fails, it runs the alternatives a careful statistician would, and tells you whether the result still holds. An AI assistant's analysis and yours get the same treatment.</p>
+      <div class="actions">
+        <a class="btn primary" href="#start">Try it on a script</a>
+        <a class="btn ghost" href="https://github.com/bhaskargurram-ai/stataudit">View on GitHub</a>
+      </div>
+      <p class="status">Version 1.0.0, MIT licensed. Python, scipy.stats and statsmodels; the fix agent is experimental.</p>
+    </div>
+
+    <div class="fig" role="figure" aria-label="Example 01: Student's t-test on the onboarding data gives p = 0.0003, below alpha = 0.05. On the same data, Welch's t-test gives 0.066, Mann-Whitney U 0.073 and Yuen's trimmed t-test 0.342, all above alpha. The conclusion does not hold." style="--a: 64.8%; --af: 0.648;">
+      <div class="fig-code">
+        examples/01_ttest_outliers.py, line 25
+        <pre>stats.ttest_ind(treated, control)</pre>
+        <div class="res">p = 0.0003: significant at α = .05</div>
+      </div>
+      <div class="scale">
+        <div class="scale-head"><span>same data</span><div class="zones"><span class="z-sig">p &lt; α</span><span class="z-ns">p ≥ α</span></div><span></span></div>
+        <div class="rows">
+          <div class="row">
+            <div class="lab">Student's t<small>what the script ran</small></div>
+            <div class="track"><span class="dot ran" style="--x: 5.7%"></span></div>
+            <div class="pv bad">0.0003</div>
+          </div>
+          <div class="row">
+            <div class="lab">Welch's t<small>variances differ 16×</small></div>
+            <div class="track"><span class="dot alt" style="--x: 68.0%; --x0: 5.7%; --i: 0"></span></div>
+            <div class="pv alt" style="--i: 0">0.066</div>
+          </div>
+          <div class="row">
+            <div class="lab">Mann-Whitney U<small>non-normal, n = 14</small></div>
+            <div class="track"><span class="dot alt" style="--x: 69.2%; --x0: 5.7%; --i: 1"></span></div>
+            <div class="pv alt" style="--i: 1">0.073</div>
+          </div>
+          <div class="row">
+            <div class="lab">Yuen's trimmed t<small>3 outliers</small></div>
+            <div class="track"><span class="dot alt" style="--x: 87.4%; --x0: 5.7%; --i: 2"></span></div>
+            <div class="pv alt" style="--i: 2">0.342</div>
+          </div>
+        </div>
+        <div class="axis" aria-hidden="true">
+          <span>p, log scale</span>
+          <div class="ticks">
+            <span style="left: 18.9%">.001</span><span style="left: 45.9%">.01</span><span style="left: 73%">.1</span><span class="end" style="left: 100%">1</span>
+            <span class="a" style="left: 64.8%">α = .05</span>
+          </div>
+          <span></span>
+        </div>
+      </div>
+      <div class="fig-foot"><span class="chip bad">does not hold</span><span class="ft">Every alternative it calls for lands above α.</span></div>
+    </div>
+  </div>
+
+  <section id="report">
+    <div class="wrap">
+      <h2>A report a statistician would recognise</h2>
+      <p class="intro">Each test gets one sentence that says what it reported, what is wrong with its input, what the alternatives say and whether the conclusion holds, followed by the evidence: Shapiro-Wilk, robust z-scores, variance ratios, effect sizes. Terminal, HTML, Markdown and JSON.</p>
+      <figure class="shot">
+        <a href="assets/report-example-01.png"><img src="assets/report-example-01.png" width="1884" height="2202" loading="lazy" alt="The stataudit HTML report for examples/01_ttest_outliers.py: at least one conclusion does not hold. Student's t-test at line 25 reports p = 3.2e-04, but treated has 3 outliers, variances differ 15.9 times and treated is non-normal. Welch's t-test gives p = 0.066, Yuen's 20% trimmed t-test 0.342 and Mann-Whitney U 0.073, none significant."></a>
+      </figure>
+      <p class="note">Real output of <code>stataudit run examples/01_ttest_outliers.py --html report.html</code>, cropped below the result card.</p>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>It looks at the data each test received, not the code that called it</h2>
+      <p class="intro"><code>ttest_ind(a, b)</code> is fine or not depending on what <code>a</code> and <code>b</code> hold after your filtering. So stataudit runs the analysis and watches. <strong>Fixed rules, not a model, decide each verdict.</strong></p>
+      <figure>
+        <div class="diagram"><img src="assets/how-it-works.svg" width="1000" height="440" alt="stataudit run executes a script or notebook in a subprocess and traces every scipy.stats and statsmodels OLS call. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data. Fixed rules then give a verdict: holds, fragile or does not hold. stataudit lint and stataudit check-report run without executing anything. Results go to terminal, HTML, Markdown, JSON and PR comment reports."></div>
+      </figure>
+      <div class="grid steps">
+        <div>
+          <h3>Trace</h3>
+          <p>Your script or notebook runs in a subprocess with a timeout. Every <code>scipy.stats</code> test and statsmodels OLS fit is recorded with its arrays, options, result and line.</p>
+        </div>
+        <div>
+          <h3>Audit</h3>
+          <p>Each call's own data is checked: normality, outliers, equal variances, leverage and Cook's distance, expected counts, and how many p-values the script computed.</p>
+        </div>
+        <div>
+          <h3>Alternatives</h3>
+          <p>Only when a check fails: Welch, Yuen and Mann-Whitney; Spearman and refits without influential points; HC3 errors; Fisher or Monte Carlo; Holm.</p>
+        </div>
+        <div>
+          <h3>Verdict</h3>
+          <p><span class="chip ok">holds</span> <span class="chip warn">fragile</span> <span class="chip bad">does not hold</span>, with the evidence. A clean analysis gets no alternatives at all.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="examples">
+    <div class="wrap">
+      <h2>Four analyses that look fine</h2>
+      <p class="intro">Each bundled example is the kind of analysis an assistant writes when asked a simple question. The code runs, a p-value comes out, and a conclusion follows. These are stataudit's real verdicts.</p>
+      <ol class="ledger">
+        <li>
+          <div class="q">Is the new onboarding flow different?<code>01_ttest_outliers.py</code></div>
+          <div class="said"><span class="lbl">The script said</span>Student's t-test, <b>p = 0.0003</b></div>
+          <div class="found"><span class="lbl">stataudit found</span>3 outliers, variances <b>16×</b> apart. Welch <b>0.066</b>, Mann-Whitney <b>0.073</b>, Yuen <b>0.342</b></div>
+          <div class="v"><span class="chip bad">does not hold</span></div>
+        </li>
+        <li>
+          <div class="q">Does marketing spend predict sign-ups?<code>02_pearson_leverage.py</code></div>
+          <div class="said"><span class="lbl">The script said</span>Pearson <b>r = 0.81</b>, <b>p = 1.2e-06</b></div>
+          <div class="found"><span class="lbl">stataudit found</span>2 high-leverage regions create it. Without them <b>r = 0.06</b>, p = 0.774; Spearman p = <b>0.154</b></div>
+          <div class="v"><span class="chip bad">does not hold</span></div>
+        </li>
+        <li>
+          <div class="q">Does churn reason depend on plan?<code>03_chisq_sparse.py</code></div>
+          <div class="said"><span class="lbl">The script said</span>chi-square on a 3×4 table, <b>p = 0.03</b></div>
+          <div class="found"><span class="lbl">stataudit found</span><b>67 %</b> of expected counts below 5. Monte Carlo test with fixed margins: <b>p = 0.08</b></div>
+          <div class="v"><span class="chip bad">does not hold</span></div>
+        </li>
+        <li>
+          <div class="q">Which of 15 metrics changed?<code>04_many_tests.py</code></div>
+          <div class="said"><span class="lbl">The script said</span>15 Welch t-tests, <b>3 significant</b></div>
+          <div class="found"><span class="lbl">stataudit found</span>54 % chance of a false positive. After Holm, <b>2</b> survive; p = 0.02 becomes <b>0.256</b></div>
+          <div class="v"><span class="chip warn">fragile</span></div>
+        </li>
+      </ol>
+      <figure>
+        <div class="diagram"><img src="assets/does-it-survive.svg" width="1000" height="452" loading="lazy" alt="Example 01 measured. Control has 60 values between 8 and 15 minutes with mean 11.7. Treated has 11 values between 10 and 14 plus 3 users at 21.5, 24 and 26.5 minutes, which pull its mean from 12.0 to 14.6. Student's t-test gives p = 0.0003; Welch's t gives 0.066, Mann-Whitney U 0.073 and Yuen's trimmed t 0.342, all above alpha = 0.05."></div>
+        <figcaption>Example 01, drawn from its own data. Three users who left the tab open move the treated mean by 2.6 minutes; Student's t-test pools the variances and calls it significant. Nothing that accounts for them agrees.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="static">
+    <div class="wrap">
+      <h2>When you can't run the analysis</h2>
+      <p class="intro">Private data, a paper draft, a report someone pasted into a pull request. Two commands work without executing anything.</p>
+      <div class="split">
+        <div>
+          <h3><code>stataudit check-report</code></h3>
+          <p class="note" style="margin:0 0 16px">Recomputes p from APA-style results in Markdown, text, HTML or PDF, in the spirit of statcheck, and flags inconsistencies, including the gross ones that flip significance.</p>
+          <div class="tblwrap"><table class="tbl">
+            <thead><tr><th scope="col">Reported</th><th scope="col">Recomputed</th><th scope="col">Result</th></tr></thead>
+            <tbody>
+              <tr><td>t(28) = 2.20, p = .04</td><td class="n">0.036</td><td><span class="chip ok">consistent</span></td></tr>
+              <tr><td>z = 2.43, p = .03</td><td class="n">0.015</td><td><span class="chip warn">inconsistent</span></td></tr>
+              <tr><td>F(2, 45) = 3.10, p = .04</td><td class="n">0.055</td><td><span class="chip bad">gross</span></td></tr>
+              <tr><td>r(48) = .21, p = .01</td><td class="n">0.143</td><td><span class="chip bad">gross</span></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+        <div>
+          <h3><code>stataudit lint</code></h3>
+          <p class="note" style="margin:0 0 16px">Reads <code>.py</code> and <code>.ipynb</code> as a syntax tree. Fast, needs no data, and each finding comes with a suggested fix.</p>
+          <ul class="points">
+            <li><strong>Many tests, no correction.</strong> Several p-values and no Holm, Bonferroni or FDR step.</li>
+            <li><strong>Student's t by default.</strong> <code>ttest_ind</code> without <code>equal_var=False</code> on unchecked data.</li>
+            <li><strong>Pearson without a look,</strong> chi-square on small tables, and the same arrays put through three or more tests.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="agent">
+    <div class="wrap">
+      <h2>An agent that proposes a fix, and a tool that checks it by running it</h2>
+      <p class="intro"><code>stataudit fix</code> asks an LLM for a corrected analysis. It is <strong>experimental and off by default</strong>, uses your own API key, and its patch counts only after stataudit has run it and audited the result.</p>
+      <figure>
+        <div class="diagram"><img src="assets/fix-loop.svg" width="1000" height="380" loading="lazy" alt="The fix agent. The model sees the script, the findings and a data summary, never raw rows unless asked. It proposes a schema-checked patch with read-only tools and runs nothing. A static gate rejects dangerous imports and calls. stataudit runs the patched script through the tracer in a subprocess with no secrets and accepts it only if the same questions are answered, the tests hold or improve and no new critical findings appear."></div>
+      </figure>
+      <div class="split">
+        <ul class="points">
+          <li><strong>Your rows stay home.</strong> The model sees the script, the findings and column names, dtypes and n. Raw data only with <code>--share-data</code>.</li>
+          <li><strong>Verified, then shown.</strong> You get a diff and a before/after verdict table. Nothing is written without <code>--apply</code>.</li>
+          <li><strong>Grounded explanations.</strong> <code>stataudit explain</code> rejects any summary containing a number that isn't in the findings.</li>
+        </ul>
+        <ul class="points warn">
+          <li><strong>Unbenchmarked.</strong> We don't publish a success rate because we haven't measured one. Expect it to find nothing when the problem is the study design.</li>
+          <li><strong>A verified fix can change the question.</strong> Mann-Whitney compares distributions, not means. Read the diff.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="security">
+    <div class="wrap">
+      <h2>Safe to run on pull requests from strangers</h2>
+      <p class="intro">On GitHub, stataudit splits the work into jobs that pass artifacts to each other, so <strong>no job both runs PR code and holds a secret or a write token</strong>. Scripts run only if you list them in <code>stataudit.toml</code>.</p>
+      <figure>
+        <div class="diagram"><img src="assets/security-model.svg" width="1000" height="486" loading="lazy" alt="Four jobs and their capabilities. The check job runs PR code with a read-only token and no secrets. The agent propose job holds the LLM key and never runs PR code. The agent verify job runs the patched script with no secrets. The comment job holds a write token, never checks out PR code and re-renders the card from validated JSON."></div>
+      </figure>
+      <div class="split">
+        <ul class="points">
+          <li><strong>Check job.</strong> Runs on <code>pull_request</code> with a read-only token, no secrets and <code>persist-credentials: false</code>. Lint and check-report never execute anything.</li>
+          <li><strong>Comment job.</strong> Never checks out PR code. It validates <code>result.json</code>, re-renders the card and escapes all PR text.</li>
+        </ul>
+        <ul class="points warn">
+          <li><strong>Not a sandbox.</strong> A malicious PR can still tamper with its own results inside the unprivileged job.</li>
+          <li>Read the full threat model in <a href="https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/SECURITY_MODEL.md">SECURITY_MODEL.md</a>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <h2>Try it in three steps</h2>
+      <p class="intro">The core needs only numpy, scipy, pandas, click and jinja2.</p>
+      <ol class="steps">
+        <li>
+          <h3>Install</h3>
+          <pre><code>pip install stataudit   <span class="c"># once 1.0.0 is on PyPI</span>
+pip install "git+https://github.com/bhaskargurram-ai/stataudit@v1.0.0"</code></pre>
+        </li>
+        <li>
+          <h3>Audit an analysis</h3>
+          <p>Scripts and notebooks run as they are. Exit code 1 when a conclusion is fragile or doesn't hold.</p>
+          <pre><code>stataudit run analysis.py --html report.html
+stataudit run notebook.ipynb
+stataudit check-report results.md
+stataudit lint analysis.py</code></pre>
+        </li>
+        <li>
+          <h3>Add it to pull requests</h3>
+          <p>From your repository root. It writes the caller workflows and a commented <code>stataudit.toml</code>, and won't overwrite files without <code>--force</code>.</p>
+          <pre><code>stataudit init
+stataudit init --agent   <span class="c"># with the fix agent</span></code></pre>
+          <details>
+            <summary><code>.github/workflows/stataudit.yml</code>: check the PR</summary>
+<pre><code>name: stataudit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stataudit-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.0
+    with:
+      stataudit-ref: v1.0.0
+      python-version: "3.12"
+      install-command: 'pip install -r requirements.txt || true'
+      fail-on: never <span class="c">  # or "fragile" / "fails" to fail the check</span></code></pre>
+          </details>
+          <details>
+            <summary><code>.github/workflows/stataudit-comment.yml</code>: post the card</summary>
+<pre><code>name: stataudit comment
+
+on:
+  workflow_run:
+    workflows: ["stataudit"] <span class="c">  # must match the `name:` of stataudit.yml</span>
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request' &amp;&amp; github.event.workflow_run.conclusion != 'cancelled'
+    permissions:
+      contents: read
+      actions: read        <span class="c">  # download the artifact of the triggering run</span>
+      pull-requests: write <span class="c">  # upsert the comment</span>
+    uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.0
+    with:
+      stataudit-ref: v1.0.0</code></pre>
+          </details>
+          <details>
+            <summary><code>stataudit.toml</code>: what CI may run</summary>
+<pre><code>alpha = 0.05
+fail-on = "fragile"            <span class="c"># fragile | fails | never</span>
+run = ["analysis/**/*.py"]     <span class="c"># executed: opt-in</span>
+reports = ["reports/**/*.md"]  <span class="c"># checked with check-report</span></code></pre>
+          </details>
+        </li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>stataudit is MIT licensed, by Bhaskar Gurram.</span>
+    <ul>
+      <li><a href="https://github.com/bhaskargurram-ai/stataudit">Source on GitHub</a></li>
+      <li><a href="https://github.com/bhaskargurram-ai/stataudit#readme">README</a></li>
+      <li><a href="https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/SECURITY_MODEL.md">Security model</a></li>
+      <li><a href="https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/AGENT.md">Agent docs</a></li>
+      <li><a href="https://github.com/bhaskargurram-ai/stataudit/blob/main/CHANGELOG.md">Changelog</a></li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>
