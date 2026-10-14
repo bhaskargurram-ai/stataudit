@@ -27,7 +27,7 @@ on:
       stataudit-ref:
         description: Tag or commit SHA of stataudit to install (keep it equal to the @ref of this workflow).
         type: string
-        default: v1.0.0
+        default: v1.0.1
       stataudit-repository:
         description: Repository stataudit is installed from.
         type: string

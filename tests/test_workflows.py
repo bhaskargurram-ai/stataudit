@@ -221,5 +221,20 @@ class WorkflowSecurityTest(unittest.TestCase):
         self.assertEqual(key_steps, ["Propose fixes (holds the LLM key; never runs PR code)"])
 
 
+class RefDefaultsTest(unittest.TestCase):
+    def test_reusable_workflows_default_to_this_release(self):
+        """A caller that omits `stataudit-ref` must install the release its `@ref` names, not an older one."""
+        import stataudit
+
+        want = f"v{stataudit.__version__}"
+        seen = 0
+        for path in sorted(WF_DIR.glob("*.yml")):
+            inputs = ((load(path).get("on") or {}).get("workflow_call") or {}).get("inputs") or {}
+            if "stataudit-ref" in inputs:
+                seen += 1
+                self.assertEqual(inputs["stataudit-ref"].get("default"), want, path.name)
+        self.assertGreater(seen, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,9 +5,9 @@
 #
 #   jobs:
 #     check:
-#       uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.0
+#       uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.1
 #       with:
-#         stataudit-ref: v1.0.0
+#         stataudit-ref: v1.0.1
 #
 # It lints the changed .py/.ipynb files, recomputes the p-values in changed
 # reports, and re-runs the analyses listed under `run` in stataudit.toml (read
@@ -38,7 +38,7 @@ on:
       stataudit-ref:
         description: Tag or commit SHA of stataudit to install (keep it equal to the @ref of this workflow).
         type: string
-        default: v1.0.0
+        default: v1.0.1
       stataudit-repository:
         description: Repository stataudit is installed from.
         type: string
