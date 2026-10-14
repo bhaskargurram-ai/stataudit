@@ -12,7 +12,7 @@
   <a href="https://github.com/bhaskargurram-ai/stataudit/actions/workflows/ci.yml"><img src="https://github.com/bhaskargurram-ai/stataudit/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
   <a href="https://github.com/bhaskargurram-ai/stataudit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="Python 3.10 to 3.13">
-  <img src="https://img.shields.io/badge/version-1.0.0-informational" alt="Version 1.0.0">
+  <a href="https://pypi.org/project/stataudit/"><img src="https://img.shields.io/pypi/v/stataudit" alt="PyPI: stataudit"></a>
   <img src="https://img.shields.io/badge/agent-experimental-orange" alt="Agent: experimental">
 </p>
 
@@ -130,7 +130,7 @@ stataudit report — examples/01_ttest_outliers.py
 ### 1. Install
 
 ```bash
-pip install stataudit                 # once 1.0.0 is published to PyPI
+pip install stataudit
 # or, straight from GitHub:
 pip install "git+https://github.com/bhaskargurram-ai/stataudit@v1.0.0"
 
