@@ -110,8 +110,20 @@ reported consistent with a note.
 
 **Corrected p-values.** If "Bonferroni", "Holm", "Šidák", "Tukey",
 "Benjamini", "FDR", "adjusted" or "corrected" appears in the clause before the
-result or between statistic and p, only one thing is checked: a corrected p
-cannot be smaller than the uncorrected p.
+result, between statistic and p, or right after the p-value (`p = .24
+(Bonferroni-corrected)`, `p = .24, Holm-adjusted`), only one thing is checked:
+a corrected p cannot be smaller than the uncorrected p.
+
+**Bounds.** A statistic reported as a bound is checked as one: `t(12) < 1.2`
+means |t| < 1.2, so p ≥ .253 and `p < .001` is a gross inconsistency;
+`t(30) < -3` means |t| > 3. The message then reads `p ≥ …` or `p ≤ …`.
+
+**Formats.** Besides APA style and R's print styles: degrees of freedom with
+thousands separators (`t(1,234)`, `F(1, 1,234)`; `F(1,234)` without a space
+stays two dfs), p-values in percent (`p = 5%`), `p's < .05`, and inline HTML
+in Markdown or text (`χ<sup>2</sup>(12)`, `<i>p</i>`). Numbers that continue
+as a fraction or power (`p = 4/5`, `t = 1.2^3`) are skipped rather than
+truncated.
 
 `p = .000` is accepted with a note to report `p < .001`.
 
@@ -287,7 +299,7 @@ repository (pin them to a release tag or commit SHA):
 
 | Input | Default | |
 |---|---|---|
-| `stataudit-ref` | `v1.0.0` | keep equal to the `@ref` of the workflow |
+| `stataudit-ref` | `v1.0.1` | keep equal to the `@ref` of the workflow |
 | `stataudit-repository` | `bhaskargurram-ai/stataudit` | |
 | `python-version` | `"3.12"` | |
 | `install-command` | `""` | installs what the analyses import (runs PR code; stataudit's virtualenv is first on `PATH`) |
@@ -328,7 +340,7 @@ caller: secret `STATAUDIT_LLM_API_KEY`; variables `STATAUDIT_LLM_PROVIDER`,
 
 ### Composite action (`action.yml`)
 
-`uses: bhaskargurram-ai/stataudit@v1.0.0` with `command:` one of `ci`
+`uses: bhaskargurram-ai/stataudit@v1.0.1` with `command:` one of `ci`
 (default), `summary`, `comment`, `agent-propose`, `agent-verify`. Inputs:
 `base`, `head`, `config`, `fail-on` (`config`), `output-dir`
 (`stataudit-out`), `result` (`stataudit-out/result.json`), `pr-number`,
