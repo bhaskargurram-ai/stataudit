@@ -16,6 +16,7 @@ import pandas as pd
 from click.testing import CliRunner
 from helpers import ROOT, SRC, TempDirMixin, write_script
 
+import stataudit
 from stataudit.cli import main as cli
 
 GOOD = """
@@ -117,7 +118,7 @@ class TestCLI(TempDirMixin, unittest.TestCase):
                     "init", "ui", "mcp"):
             self.assertIn(cmd, out.stdout)
         ver = subprocess.run([sys.executable, "-m", "stataudit", "--version"], capture_output=True, text=True, env=env, cwd=ROOT)
-        self.assertIn("1.0.0", ver.stdout)
+        self.assertIn(stataudit.__version__, ver.stdout)
 
 
 class TestWeb(TempDirMixin, unittest.TestCase):

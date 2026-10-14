@@ -94,6 +94,7 @@ _MINUS_RE = re.compile("[\u2212\u2013\u2012\ufe63\uff0d]")
 _SPACE_RE = re.compile("[\u00a0\u2000-\u200b\u202f\u205f\u3000\t]")
 #: Greek/mathematical chi variants and the Latin X some authors use.
 _CHI_RE = re.compile("[\u03c7\u03a7\U0001d712\U0001d6d8\U0001d74c\U0001d786\U0001d7c0]")
+_INLINE_TAG_RE = re.compile(r"</?(?:sup|sub|i|em|b|strong|var|span)(?:\s[^<>]{0,80})?>", re.I)
 
 
 def normalize(text: str) -> str:
@@ -103,6 +104,8 @@ def normalize(text: str) -> str:
     s = _CHI_RE.sub("χ", s)
     s = s.replace("≤", "<=").replace("≥", ">=").replace("&lt;", "<").replace("&gt;", ">")
     s = s.replace("\\chi", "χ").replace("$", "")
+    # Inline HTML in Markdown or text: χ<sup>2</sup>(12), <i>p</i> < .05
+    s = _INLINE_TAG_RE.sub("", s)
     # Markdown / LaTeX emphasis around symbols: *t*(28), _p_ < .05, **F**(1, 2), \textit{p}
     s = re.sub(r"\\(?:textit|mathit|emph|mathrm|text)\{([^{}]{1,3})\}", r"\1", s)
     s = s.replace("*", "").replace("_", "").replace("{", "").replace("}", "")
@@ -153,6 +156,9 @@ def parse_num(text: str) -> Num:
 
 _SEP = r"\s*[,;/]\s*"
 _DF = r"(\d+(?:\.\d+)?|-\s*\d+(?:\.\d+)?)"
+#: A df that may be written with thousands separators: t(1,234). Used where the df cannot be confused with a
+#: second df (single-df tests, and the second df of F after ", ").
+_DF_K = r"(\d{1,3}(?:,\d{3})+(?![\d.])|\d+(?:\.\d+)?|-\s*\d+(?:\.\d+)?)"
 _OPEN, _CLOSE = r"\s*[(\[]\s*", r"\s*[)\]]"
 
 _STAT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -162,17 +168,26 @@ _STAT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("F", re.compile(rf"(?<![A-Za-z])F\s*=\s*(?P<stat>{_NUM})\s*,\s*num\s*df\s*=\s*(?P<df1>{_DF})\s*,\s*denom\s*df\s*=\s*(?P<df2>{_DF})")),
     ("F", re.compile(rf"(?<![A-Za-z])F\s*=\s*(?P<stat>{_NUM})\s*,\s*df\s*=\s*(?P<df1>{_DF})\s*(?:,|and)\s*(?P<df2>{_DF})")),
     # APA styles
-    ("t", re.compile(rf"(?<![A-Za-z])t{_OPEN}(?P<df1>{_DF}){_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})")),
-    ("F", re.compile(rf"(?<![A-Za-z])F{_OPEN}(?P<df1>{_DF}){_SEP}(?P<df2>{_DF}){_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})")),
-    ("r", re.compile(rf"(?<![A-Za-z])r{_OPEN}(?P<df1>{_DF}){_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})")),
+    ("t", re.compile(rf"(?<![A-Za-z])t{_OPEN}(?P<df1>{_DF_K}){_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})")),
+    ("F", re.compile(rf"(?<![A-Za-z])F{_OPEN}(?P<df1>{_DF})(?:\s*[,;/]\s+(?P<df2k>\d{{1,3}}(?:,\d{{3}})+(?![\d.]))|{_SEP}(?P<df2>{_DF})){_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})")),
+    ("r", re.compile(rf"(?<![A-Za-z])r{_OPEN}(?P<df1>{_DF_K}){_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})")),
     ("chi2", re.compile(
         rf"(?:(?:χ|(?<![A-Za-z])chi)\s*(?:\^?\s*2|-?\s*squared?|-?\s*square)?|(?<![A-Za-z])X\s*(?:\^?\s*2|-?\s*squared?))"
-        rf"{_OPEN}(?P<df1>{_DF})(?:{_SEP}N\s*=\s*(?P<n>\d[\d,]*))?{_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})", re.I)),
-    ("Q", re.compile(rf"(?<![A-Za-z])Q\s*(?:w|b|within|between)?{_OPEN}(?P<df1>{_DF}){_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})")),
+        rf"{_OPEN}(?P<df1>{_DF_K})(?:{_SEP}N\s*=\s*(?P<n>\d[\d,]*))?{_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})", re.I)),
+    ("Q", re.compile(rf"(?<![A-Za-z])Q\s*(?:w|b|within|between)?{_OPEN}(?P<df1>{_DF_K}){_CLOSE}\s*{_OP}\s*(?P<stat>{_NUM})")),
     ("z", re.compile(rf"(?<![A-Za-z])[zZ]\s*{_OP}\s*(?P<stat>{_NUM})(?![\d.])")),
 ]
 # The op group is the only unnamed group in the APA patterns.
-_P_RE = re.compile(rf"(?<![A-Za-z])p\s*s?\s*(?:-?\s*values?)?\s*{_OP}\s*(?P<p>{_SCI})", re.I)
+_P_RE = re.compile(
+    rf"(?<![A-Za-z])p\s*(?:['’]?\s*s)?\s*(?:-?\s*values?)?\s*{_OP}\s*(?P<p>{_SCI})(?P<pct>\s*%)?", re.I
+)
+#: A number that continues as a fraction or a power (``p=4/5``, ``1.2^3``): the match is only a prefix of it.
+_CONTINUES_RE = re.compile(r"\s*[/^]\s*[-+]?\d")
+#: An adjustment named right after the p-value: ``p = .24 (Bonferroni-corrected)``, ``p = .03, Holm-adjusted``.
+_ADJUSTED_AFTER_RE = re.compile(
+    r"^\s*[(,;]?\s*(?:bonferroni|holm|šidák|sidak|tukey|benjamini|fdr|adjusted|corrected)",
+    re.I,
+)
 _NS_RE = re.compile(r"(?<![A-Za-z])(?:n\.\s?s\.?|ns|n\.s|not\s+significant|non-?significant)(?![A-Za-z])", re.I)
 _ONE_TAILED_RE = re.compile(r"one[- ]?(?:tailed|sided)|directional\s+(?:test|hypothes)", re.I)
 _ADJUSTED_RE = re.compile(
@@ -299,8 +314,11 @@ def _stat_interval(res: ReportedResult) -> tuple[float, float]:
     """Interval of statistic values consistent with how it was reported (|stat| for symmetric tests)."""
     lo, hi = res.stat.low, res.stat.high
     if res.stat_op in ("<", "<="):
-        lo = -math.inf if res.kind in ("t", "z", "r") else 0.0
-        hi = res.stat.value
+        if res.kind in ("t", "z", "r"):
+            # APA "t < 1" bounds the magnitude: |t| < 1. A negative bound (t < -2) means |t| > 2.
+            lo, hi = (-res.stat.value, res.stat.value) if res.stat.value >= 0 else (-math.inf, res.stat.value)
+        else:
+            lo, hi = 0.0, res.stat.value
     elif res.stat_op in (">", ">="):
         lo, hi = res.stat.value, math.inf
     if res.kind in ("t", "z", "r"):
@@ -427,7 +445,8 @@ def evaluate(res: ReportedResult, alpha: float = 0.05, one_tailed_in_document: b
     elif c_lo >= alpha:
         res.computed_significant = False
     else:
-        res.computed_significant = None if point is None else bool(point < alpha)
+        # a bound (t < 1.2) that straddles alpha leaves it open; an exact statistic decides by its value
+        res.computed_significant = None if point is None or res.stat_op != "=" else bool(point < alpha)
 
     if res.adjusted:
         # A corrected p-value can only be larger than the raw one.
@@ -444,7 +463,7 @@ def evaluate(res: ReportedResult, alpha: float = 0.05, one_tailed_in_document: b
 
     if _overlaps(c_lo, c_hi, rep):
         res.status = CONSISTENT
-        res.message = f"Recomputed p = {_fmt(point)}."
+        res.message = f"Recomputed p {_p_rel(res)} {_fmt(point)}."
         return res
     if symmetric and tails == 2 and one_tailed_in_document:
         o_lo, o_hi = computed_range(res, 1)
@@ -466,13 +485,22 @@ def evaluate(res: ReportedResult, alpha: float = 0.05, one_tailed_in_document: b
         res.status = GROSS
         now = "not significant" if res.reported_significant else "significant"
         res.message = (
-            f"Reported {reported}, but the statistic gives {tail_txt}p = {_fmt(point)}: "
+            f"Reported {reported}, but the statistic gives {tail_txt}p {_p_rel(res)} {_fmt(point)}: "
             f"the result is {now} at α = {alpha:g}."
         )
     else:
         res.status = INCONSISTENT
-        res.message = f"Reported {reported}, but the statistic gives {tail_txt}p = {_fmt(point)}."
+        res.message = f"Reported {reported}, but the statistic gives {tail_txt}p {_p_rel(res)} {_fmt(point)}."
     return res
+
+
+def _p_rel(res: ReportedResult) -> str:
+    """How the recomputed p relates to the shown value: a bound on the statistic bounds p the other way."""
+    if res.stat_op in ("<", "<="):
+        return "≥"
+    if res.stat_op in (">", ">="):
+        return "≤"
+    return "="
 
 
 def _fmt(p: float | None) -> str:
@@ -493,7 +521,7 @@ def _spans_overlap(a: tuple[int, int], spans: Iterable[tuple[int, int]]) -> bool
 def _parse_df(text: str | None) -> Num | None:
     if text is None:
         return None
-    return parse_num(text.replace(" ", ""))
+    return parse_num(text.replace(" ", "").replace(",", ""))
 
 
 def _sentence_window(norm: str, start: int, end: int) -> str:
@@ -566,10 +594,14 @@ def extract_results(text: str, page_breaks: bool = False) -> list[ReportedResult
             end = m.end()
             if pm and (not nm or pm.start() <= nm.start()):
                 p_op = {"=<": "<=", "=>": ">="}.get(pm.group(1), pm.group(1))
+                if _CONTINUES_RE.match(tail, pm.end("p")):
+                    continue  # p=4/5: not a p-value we can read
                 try:
                     p = parse_num(pm.group("p"))
                 except ValueError:
                     continue
+                if pm.group("pct"):  # p = 5% -> .05
+                    p = Num(p.text + "%", p.value / 100, p.half / 100)
                 end = m.end() + pm.end()
                 gap = tail[: pm.start()]
             elif nm and nm.start() <= 30:
@@ -581,10 +613,12 @@ def extract_results(text: str, page_breaks: bool = False) -> list[ReportedResult
             # Something else between the statistic and the p (another sentence) means they do not belong together.
             if re.search(r"[.!?]\s+[A-Z]", gap):
                 continue
+            if _CONTINUES_RE.match(norm, m.end("stat")):
+                continue  # t = 1.2^3: only a prefix of the number was matched
             try:
                 stat = parse_num(m.group("stat"))
                 df1 = _parse_df(m.groupdict().get("df1"))
-                df2 = _parse_df(m.groupdict().get("df2"))
+                df2 = _parse_df(m.groupdict().get("df2") or m.groupdict().get("df2k"))
             except ValueError:
                 continue
             n_txt = m.groupdict().get("n")
@@ -606,7 +640,8 @@ def extract_results(text: str, page_breaks: bool = False) -> list[ReportedResult
                 p=p,
                 n=int(n_txt.replace(",", "")) if n_txt else None,
                 tails=1 if _ONE_TAILED_RE.search(sentence) else 2,
-                adjusted=bool(_ADJUSTED_RE.search(before + norm[m.end():end])),
+                adjusted=bool(_ADJUSTED_RE.search(before + norm[m.end():end])
+                              or _ADJUSTED_AFTER_RE.match(norm[end : starts[i + 1] if i + 1 < len(starts) else None])),
                 page=page if page_breaks else None,
             )
             out.append(res)

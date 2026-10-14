@@ -24,9 +24,9 @@ concurrency:
 
 jobs:
   check:
-    uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.0
+    uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.1
     with:
-      stataudit-ref: v1.0.0
+      stataudit-ref: v1.0.1
       python-version: "3.12"
       # Installs what the analyses import (runs PR code, unprivileged job). numpy, scipy
       # and pandas are already there.

@@ -483,7 +483,7 @@
         <li>
           <h3>Install</h3>
           <pre><code>pip install stataudit
-pip install "git+https://github.com/bhaskargurram-ai/stataudit@v1.0.0"</code></pre>
+pip install "git+https://github.com/bhaskargurram-ai/stataudit@v1.0.1"</code></pre>
         </li>
         <li>
           <h3>Audit an analysis</h3>
@@ -515,9 +515,9 @@ concurrency:
 
 jobs:
   check:
-    uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.0
+    uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.1
     with:
-      stataudit-ref: v1.0.0
+      stataudit-ref: v1.0.1
       python-version: "3.12"
 <span class="c">      # Installs what the analyses import (runs PR code, unprivileged job). numpy, scipy</span>
 <span class="c">      # and pandas are already there.</span>
@@ -542,9 +542,9 @@ jobs:
       contents: read
       actions: read<span class="c">          # download the artifact of the triggering run</span>
       pull-requests: write<span class="c">   # upsert the comment and the label</span>
-    uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.0
+    uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.1
     with:
-      stataudit-ref: v1.0.0
+      stataudit-ref: v1.0.1
       labels: true</code></pre>
           </details>
           <details>

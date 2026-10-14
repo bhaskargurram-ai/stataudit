@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stataudit"
-version = "1.0.0"
+version = "1.0.1"
 description = "Check AI-written statistics with evidence: re-run the analysis, audit each test's assumptions on the real data, recompute reported p-values, lint analysis code, and verify proposed fixes."
 readme = "README.md"
 license = "MIT"

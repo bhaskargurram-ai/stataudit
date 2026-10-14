@@ -254,6 +254,58 @@ class TestStatuses(unittest.TestCase):
         self.assertEqual(one("t(30) > 5, p < .001").status, CONSISTENT)
 
 
+class TestFormatsFromBoeschen(unittest.TestCase):
+    """Formats found by running check-report on Böschen's statcheck test strings (arXiv 2408.07948)."""
+
+    def test_thousands_separator_in_df(self):
+        r = one("t(1,234)=5.6, p<.05")
+        self.assertEqual((r.df1.value, r.status), (1234, CONSISTENT))
+        self.assertEqual(one("r(1,234)=.10, p<.001").df1.value, 1234)
+        r = one("F(1, 1,234)=5.6, p<.05")
+        self.assertEqual((r.df1.value, r.df2.value), (1, 1234))
+        r = one("F(1,234)=5.6, p<.05")  # without a space it is two dfs, as before
+        self.assertEqual((r.df1.value, r.df2.value), (1, 234))
+
+    def test_percent_p_values(self):
+        r = one("t(12)=1.2, p=5%")
+        self.assertAlmostEqual(r.p.value, 0.05)
+        self.assertEqual(r.status, GROSS)  # not "impossible: p = 5"
+        self.assertAlmostEqual(one("t(12)=1.2, p=.05%").p.value, 0.0005)
+
+    def test_fractions_and_powers_are_not_truncated(self):
+        self.assertEqual(check_text("t(12)=1.2^3, p=4/5").results, [])
+        self.assertEqual(check_text("t(12)=1.2, p=4/5").results, [])
+
+    def test_bounds_on_symmetric_statistics(self):
+        for text in ("t(12) < 1.2, p < .001", "z < 1.0, p < .001", "r(48) < .10, p < .001"):
+            with self.subTest(text=text):
+                r = one(text)
+                self.assertEqual(r.status, GROSS)
+                self.assertIn("p ≥", r.message)
+        r = one("t(12)≤1.2, p≥.05")
+        self.assertEqual(r.status, CONSISTENT)
+        self.assertFalse(r.computed_significant)
+        self.assertGreater(r.computed_p, 0.25)
+        self.assertEqual(one("t(30) < -3, p < .01").status, CONSISTENT)  # |t| > 3
+
+    def test_inline_html_in_markdown(self):
+        r = one("χ<sup>2</sup>(12)=3.4, p<.05")
+        self.assertEqual((r.kind, r.status), ("chi2", GROSS))
+        self.assertEqual(one("<i>t</i>(28) = 2.20, <i>p</i> = .036").status, CONSISTENT)
+
+    def test_correction_named_after_the_p_value(self):
+        for text in ("t(12)=1.9, p=.24 (Bonferroni-corrected).", "t(12)=1.9, p=.24, Holm-adjusted."):
+            with self.subTest(text=text):
+                r = one(text)
+                self.assertTrue(r.adjusted)
+                self.assertEqual(r.status, CONSISTENT)
+        self.assertFalse(one("t(28) = 2.20, p = .036, and the corrected model fit well.").adjusted)
+
+    def test_possessive_p(self):
+        r = one("t(28) = 2.20, p's < .05")
+        self.assertEqual((r.p_op, r.status), ("<", CONSISTENT))
+
+
 class TestDocuments(TempDirMixin, unittest.TestCase):
     def test_example_report(self):
         rc = check_file(EXAMPLES / "reports" / "results.md")

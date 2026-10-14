@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-14
+
+### Fixed
+
+`check-report`, from a run on the 187 test strings of Böschen's statcheck
+evaluation (arXiv 2408.07948): correct verdicts went from 27 to 30 of the 35
+checkable results, false flags from 2 to 0, and no non-result is picked up.
+
+- A bound on t, z or r (`t(12) < 1.2`) is read as a bound on |t|. Before, any
+  p-value was "consistent" with it and the message showed "p = 0".
+  `computed_significant` is now unknown when a bound straddles alpha.
+- `p = 5%` is read as .05, not as an impossible p = 5.
+- `p = 4/5` and `t = 1.2^3` are skipped instead of being truncated to 4 and 1.2.
+- Degrees of freedom with thousands separators: `t(1,234)`, `r(1,234)`,
+  `χ²(1,234)`, and the second df of `F(1, 1,234)`.
+- Inline HTML in Markdown and text files: `χ<sup>2</sup>(12)`, `<i>p</i>`.
+- A correction named right after the p-value (`p = .24 (Bonferroni-corrected)`)
+  marks the result as corrected instead of producing an "inconsistent" flag.
+- `p's < .05` is read like `ps < .05`.
+
 ## [1.0.0] - 2026-10-14
 
 ### Added
