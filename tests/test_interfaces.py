@@ -113,8 +113,11 @@ class TestCLI(TempDirMixin, unittest.TestCase):
         env = dict(os.environ, PYTHONPATH=str(SRC))
         out = subprocess.run([sys.executable, "-m", "stataudit", "--help"], capture_output=True, text=True, env=env, cwd=ROOT)
         self.assertEqual(out.returncode, 0, out.stderr)
-        for cmd in ("run", "check-data", "ui", "mcp"):
+        for cmd in ("run", "check-data", "check-report", "lint", "fix", "explain", "ci", "summary", "comment", "agent",
+                    "init", "ui", "mcp"):
             self.assertIn(cmd, out.stdout)
+        ver = subprocess.run([sys.executable, "-m", "stataudit", "--version"], capture_output=True, text=True, env=env, cwd=ROOT)
+        self.assertIn("1.0.0", ver.stdout)
 
 
 class TestWeb(TempDirMixin, unittest.TestCase):
@@ -204,17 +207,43 @@ class TestMCP(TempDirMixin, unittest.TestCase):
         with self.assertRaises(ValueError):
             audit_script_tool(str(Path(self.tmp) / "missing.py"))
 
+    def test_check_report_tool(self):
+        from stataudit.mcp_server import check_report_tool
+
+        md = check_report_tool(text="We found t(28) = 1.20, p < .05 and z = 2.31, p = .021.")
+        self.assertIn("gross inconsistency", md)
+        self.assertIn("1 gross", md)
+        rpt = Path(self.tmp) / "r.md"
+        rpt.write_text("F(2, 45) = 3.81, p = .03\n", encoding="utf-8")
+        self.assertIn("All reported p-values are consistent", check_report_tool(path=str(rpt)))
+        for kwargs in ({}, {"text": "x", "path": str(rpt)}, {"path": str(Path(self.tmp) / "x.py")},
+                       {"path": str(Path(self.tmp) / "missing.md")}, {"text": "t(1) = 1, p = .5", "alpha": 3}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                check_report_tool(**kwargs)
+
+    def test_lint_file_tool(self):
+        from stataudit.mcp_server import lint_file_tool
+
+        script = write_script(self.tmp, BAD)
+        md = lint_file_tool(str(script))
+        self.assertIn("SA102", md)
+        with self.assertRaises(ValueError):
+            lint_file_tool(str(Path(self.tmp) / "notes.txt"))
+
     def test_server_registers_tools(self):
         from stataudit.mcp_server import build_server
 
         server = build_server()
         tools = asyncio.run(server.list_tools())
-        self.assertEqual({t.name for t in tools}, {"audit_script", "audit_test"})
+        self.assertEqual({t.name for t in tools}, {"audit_script", "audit_test", "check_report", "lint_file"})
         result = asyncio.run(
             server.call_tool("audit_test", {"test_name": "pearsonr", "data_json": json.dumps({"x": [1, 2, 3, 4, 5], "y": [2, 1, 4, 3, 5]})})
         )
         text = result.content[0].text if hasattr(result, "content") else str(result)
         self.assertIn("Pearson", text)
+        result = asyncio.run(server.call_tool("check_report", {"text": "t(28) = 2.20, p = .36"}))
+        text = result.content[0].text if hasattr(result, "content") else str(result)
+        self.assertIn("gross", text)
 
 
 if __name__ == "__main__":

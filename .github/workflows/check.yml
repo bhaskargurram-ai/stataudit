@@ -1,0 +1,142 @@
+# stataudit reusable workflow: check a pull request (UNPRIVILEGED zone).
+#
+# Call it from a workflow triggered by `pull_request` (see `stataudit init` or
+# examples/workflows/stataudit.yml):
+#
+#   jobs:
+#     check:
+#       uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.0
+#       with:
+#         stataudit-ref: v1.0.0
+#
+# It lints the changed .py/.ipynb files, recomputes the p-values in changed
+# reports, and re-runs the analyses listed under `run` in stataudit.toml (read
+# from the BASE commit). Re-running executes the pull request's code, so this
+# job has a read-only token and uses no secrets (for fork PRs GitHub enforces
+# that). stataudit itself is installed from its own repository at
+# `stataudit-ref` into a virtualenv BEFORE any PR code runs. The result is
+# uploaded as the `stataudit-result` artifact and rendered into the job
+# summary; the privileged comment workflow (comment.yml) posts it.
+#
+# Never call this workflow from `pull_request_target` or `workflow_run`: it
+# executes the pull request's code. The job refuses to run for other events.
+name: stataudit check
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python used for stataudit and the analyses.
+        type: string
+        default: "3.12"
+      install-command:
+        description: >-
+          Shell command that installs what the analyses import (runs PR code). It runs with stataudit's
+          virtualenv first on PATH, so `pip install -r requirements.txt` installs next to stataudit. May be empty.
+        type: string
+        default: ""
+      stataudit-ref:
+        description: Tag or commit SHA of stataudit to install (keep it equal to the @ref of this workflow).
+        type: string
+        default: v1.0.0
+      stataudit-repository:
+        description: Repository stataudit is installed from.
+        type: string
+        default: bhaskargurram-ai/stataudit
+      fail-on:
+        description: "never | warn | fail: fail the check when the overall status is at least this bad."
+        type: string
+        default: never
+      timeout-minutes:
+        description: Job timeout.
+        type: number
+        default: 30
+    outputs:
+      status:
+        description: "pass | warn | fail"
+        value: ${{ jobs.check.outputs.status }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # Only ever for `pull_request`: no write token, no secrets for forks.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.run.outputs.status }}
+    steps:
+      - name: Check out the pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0              # the base commit is needed for the diff and the config
+          persist-credentials: false  # no token in .git/config for PR code to find
+
+      - name: Check out stataudit (trusted tool source, independent of the PR)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.stataudit-repository }}
+          ref: ${{ inputs.stataudit-ref }}
+          path: .stataudit-tool
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install stataudit (isolated virtualenv)
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/stataudit-venv"
+          "$RUNNER_TEMP/stataudit-venv/bin/python" -m pip install --quiet --disable-pip-version-check ./.stataudit-tool
+          echo "STATAUDIT_BIN=$RUNNER_TEMP/stataudit-venv/bin/stataudit" >> "$GITHUB_ENV"
+
+      - name: Install the analyses' dependencies (runs PR code)
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/stataudit-venv/bin:$PATH"
+          eval "$INSTALL_COMMAND"
+
+      - name: Run stataudit (runs PR code; no token)
+        id: run
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          FAIL_ON: ${{ inputs.fail-on }}
+        run: |
+          set -euo pipefail
+          args=(ci --repo . --base "$BASE_SHA" --head "$HEAD_SHA" --out-dir stataudit-out --fail-on "$FAIL_ON" -q)
+          if [[ "$PR_NUMBER" =~ ^[0-9]{1,10}$ ]]; then args+=(--pr "$PR_NUMBER"); fi
+          status=0
+          "$STATAUDIT_BIN" "${args[@]}" || status=$?
+          if [ -f stataudit-out/result.json ]; then
+            overall="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' stataudit-out/result.json)"
+            if [[ "$overall" =~ ^[a-z]{1,10}$ ]]; then echo "status=$overall" >> "$GITHUB_OUTPUT"; fi
+          fi
+          exit "$status"
+
+      # Works for fork PRs too: no write token is needed for the job summary.
+      - name: Write the card to the job summary
+        if: always() && hashFiles('stataudit-out/result.json') != ''
+        run: '"$STATAUDIT_BIN" summary --json stataudit-out/result.json'
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stataudit-result
+          path: |
+            stataudit-out/result.json
+            stataudit-out/card.md
+            stataudit-out/pr_number
+            stataudit-out/head_sha
+          if-no-files-found: ignore
+          retention-days: 7

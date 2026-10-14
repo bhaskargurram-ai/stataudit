@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 486" width="1000" height="486" role="img" aria-labelledby="t d">
+  <title id="t">stataudit on GitHub: which job can do what</title>
+  <desc id="d">Four jobs and their capabilities. The check job runs on pull_request: it runs PR code (lint, check-report, and run on opted-in globs) with a read-only token and no secrets, and hands on result.json and card.md. The optional agent propose job runs on workflow_run, holds the LLM API key, reads PR files as data and never runs PR code; it hands on candidate fixes. The agent verify job runs the patched script with no secrets, in a separate job on a separate VM. The comment job runs on workflow_run with a write token, never checks out PR code, validates result.json and re-renders the card as one sticky comment. No job both runs PR code and holds a secret or a write token.</desc>
+  <style>
+    svg { --bg:#ffffff; --edge:#d5dae1; --ink:#1b1f24; --muted:#5b6470; --box:#f5f7f9; --arrow:#8a93a0;
+          --accent:#3557c4; --accent-bg:#e9eefc; --ok:#1a7f37; --ok-bg:#e3f4e8; --warn:#9a6700; --warn-bg:#fff3d1;
+          --bad:#c62828; --bad-bg:#fde9e7; --grey-bg:#eceff3; --dot:#4b5563; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#12161c; --edge:#343c47; --ink:#e9edf1; --muted:#9aa4ae; --box:#1a2029; --arrow:#6f7884;
+            --accent:#8fa8ff; --accent-bg:#1d2648; --ok:#57c27a; --ok-bg:#15301f; --warn:#e0b04a; --warn-bg:#362b12;
+            --bad:#ff7b72; --bad-bg:#3a1a1a; --grey-bg:#242b35; --dot:#aeb6c0; }
+    }
+    text { font-family:-apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif; fill:var(--ink); }
+    .mono { font-family:ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+    .bg { fill:var(--bg); stroke:var(--edge); }
+    .box { fill:var(--box); stroke:var(--edge); stroke-width:1.2; }
+    .inner { fill:var(--bg); stroke:var(--edge); }
+    .h { font-size:15px; font-weight:650; }
+    .h2 { font-size:13.5px; font-weight:600; }
+    .sub { font-size:12.5px; fill:var(--muted); }
+    .small { font-size:11.5px; fill:var(--muted); }
+    .wire { fill:none; stroke:var(--arrow); stroke-width:1.6; }
+    .head { fill:var(--arrow); }
+    .pill { fill:var(--bg); stroke:var(--edge); }
+    .num { fill:var(--accent); font-size:12px; font-weight:700; }
+    .numc { fill:var(--accent-bg); stroke:var(--accent); stroke-width:1.2; }
+    .c-ok { fill:var(--ok-bg); } .t-ok { fill:var(--ok); }
+    .c-warn { fill:var(--warn-bg); } .t-warn { fill:var(--warn); }
+    .c-bad { fill:var(--bad-bg); } .t-bad { fill:var(--bad); }
+    .c-acc { fill:var(--accent-bg); } .t-acc { fill:var(--accent); }
+    .c-grey { fill:var(--grey-bg); } .t-grey { fill:var(--muted); }
+    .chip { font-size:12px; font-weight:650; }
+
+    .zone1 { fill:var(--warn-bg); stroke:var(--warn); stroke-width:1.1; stroke-opacity:.6; fill-opacity:.55; }
+    .zone2 { fill:var(--accent-bg); stroke:var(--accent); stroke-width:1.1; stroke-dasharray:5 4; fill-opacity:.55; }
+    .zone3 { fill:var(--box); stroke:var(--edge); stroke-width:1.2; }
+    .colh { font-size:12px; font-weight:650; fill:var(--muted); }
+    .trig { font-size:12.5px; }
+    .zt { font-size:11.5px; fill:var(--muted); }
+    .hand { font-size:12px; fill:var(--muted); }
+    .strong { fill:var(--ink); font-weight:650; }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="head" d="M0 0 L10 5 L0 10 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0.5" y="0.5" width="999" height="485" rx="14"/>
+
+  <text class="colh" x="34" y="44">Job</text>
+  <text class="colh" x="250" y="44">Trigger</text>
+  <text class="colh" x="536.0" y="44" text-anchor="middle">runs PR code</text>
+  <text class="colh" x="652.0" y="44" text-anchor="middle">holds a secret</text>
+  <text class="colh" x="768.0" y="44" text-anchor="middle">write token</text>
+  <text class="colh" x="846" y="44">Hands on</text>
+  <rect class="zone1" x="18" y="62" width="964" height="86" rx="10"/>
+  <text class="h" x="34" y="90">check</text>
+  <text class="sub" x="34" y="112">lint, check-report, and run</text>
+  <text class="sub" x="34" y="130">on opted-in globs</text>
+  <text class="mono trig" x="250" y="90">on: pull_request</text>
+  <text class="zt" x="250" y="112">read-only token,</text>
+  <text class="zt" x="250" y="129">persist-credentials: false</text>
+  <rect class="c-warn" x="486" y="92" width="100" height="26" rx="13.0"/><text class="chip t-warn" x="536.0" y="109.3" text-anchor="middle">yes</text>
+  <rect class="c-grey" x="602" y="92" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="652.0" y="109.3" text-anchor="middle">no</text>
+  <rect class="c-grey" x="718" y="92" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="768.0" y="109.3" text-anchor="middle">no</text>
+  <text class="hand mono" x="846" y="94">result.json,</text>
+  <text class="hand mono" x="846" y="111">card.md</text>
+  <rect class="zone2" x="18" y="160" width="964" height="86" rx="10"/>
+  <text class="h" x="34" y="188">agent: propose</text>
+  <text class="sub" x="34" y="210">an LLM with read-only tools</text>
+  <text class="sub" x="34" y="228">reads PR files as data</text>
+  <text class="mono trig" x="250" y="188">on: workflow_run</text>
+  <text class="zt" x="250" y="210">gated; never checks out</text>
+  <text class="zt" x="250" y="227">or runs PR code</text>
+  <rect class="c-grey" x="486" y="190" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="536.0" y="207.3" text-anchor="middle">no</text>
+  <rect class="c-acc" x="602" y="190" width="100" height="26" rx="13.0"/><text class="chip t-acc" x="652.0" y="207.3" text-anchor="middle">LLM key</text>
+  <rect class="c-grey" x="718" y="190" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="768.0" y="207.3" text-anchor="middle">no</text>
+  <text class="hand mono" x="846" y="200">candidates/</text>
+  <rect class="zone2" x="18" y="258" width="964" height="86" rx="10"/>
+  <text class="h" x="34" y="286">agent: verify</text>
+  <text class="sub" x="34" y="308">runs the patched script</text>
+  <text class="sub" x="34" y="326">through the tracer</text>
+  <text class="mono trig" x="250" y="286">on: workflow_run</text>
+  <text class="zt" x="250" y="308">a separate job and VM</text>
+  <text class="zt" x="250" y="325">from propose</text>
+  <rect class="c-warn" x="486" y="288" width="100" height="26" rx="13.0"/><text class="chip t-warn" x="536.0" y="305.3" text-anchor="middle">yes</text>
+  <rect class="c-grey" x="602" y="288" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="652.0" y="305.3" text-anchor="middle">no</text>
+  <rect class="c-grey" x="718" y="288" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="768.0" y="305.3" text-anchor="middle">no</text>
+  <text class="hand mono" x="846" y="290">verified</text>
+  <text class="hand mono" x="846" y="307">result</text>
+  <rect class="zone3" x="18" y="356" width="964" height="86" rx="10"/>
+  <text class="h" x="34" y="384">comment</text>
+  <text class="sub" x="34" y="406">validates result.json,</text>
+  <text class="sub" x="34" y="424">re-renders the card</text>
+  <text class="mono trig" x="250" y="384">on: workflow_run</text>
+  <text class="zt" x="250" y="406">never checks out</text>
+  <text class="zt" x="250" y="423">PR code</text>
+  <rect class="c-grey" x="486" y="386" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="536.0" y="403.3" text-anchor="middle">no</text>
+  <rect class="c-grey" x="602" y="386" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="652.0" y="403.3" text-anchor="middle">no</text>
+  <rect class="c-acc" x="718" y="386" width="100" height="26" rx="13.0"/><text class="chip t-acc" x="768.0" y="403.3" text-anchor="middle">yes</text>
+  <text class="hand mono" x="846" y="388">one sticky</text>
+  <text class="hand mono" x="846" y="405">comment</text>
+  <path class="wire" d="M958 122 L958 172" marker-end="url(#arr)"/>
+  <path class="wire" d="M958 220 L958 270" marker-end="url(#arr)"/>
+  <path class="wire" d="M958 318 L958 368" marker-end="url(#arr)"/>
+  <text class="sub" x="500" y="468" text-anchor="middle">Read across each row: <tspan class="strong">no job both runs PR code and holds a secret or a write token.</tspan></text>
+</svg>

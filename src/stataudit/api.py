@@ -16,6 +16,7 @@ from .trace import DATA_PARAMS, build_record, trace_script
 __all__ = [
     "audit_call",
     "audit_script",
+    "audit_notebook",
     "report",
     "audit_ttest",
     "audit_paired_ttest",
@@ -66,9 +67,12 @@ def audit_script(
     args: Sequence[str] = (),
     alpha: float = 0.05,
     timeout: float | None = 300,
+    env: dict[str, str] | None = None,
 ) -> Report:
-    """Run a script under the tracer and audit every recorded call."""
-    tr = trace_script(path, args=list(args), timeout=timeout)
+    """Run a script (or, for ``.ipynb``, a notebook's code cells) under the tracer and audit every recorded call."""
+    if str(path).lower().endswith(".ipynb"):
+        return audit_notebook(path, alpha=alpha, timeout=timeout, env=env)
+    tr = trace_script(path, args=list(args), timeout=timeout, env=env)
     return audit_records(
         tr.records,
         alpha=alpha,
@@ -76,6 +80,43 @@ def audit_script(
         script_error=tr.error,
         meta={"returncode": tr.returncode, "timed_out": tr.timed_out, "calls": len(tr.records)},
     )
+
+
+def audit_notebook(
+    path: str | os.PathLike[str],
+    alpha: float = 0.05,
+    timeout: float | None = 300,
+    env: dict[str, str] | None = None,
+    notebook: dict[str, Any] | None = None,
+) -> Report:
+    """Execute a notebook's code cells in order under the tracer and audit every recorded call.
+
+    Call sites are reported as ``<name>.ipynb cell N, line M`` (N counts code cells).
+    """
+    from .models import Finding, Severity
+    from .notebook import trace_notebook
+
+    nt = trace_notebook(path, timeout=timeout, env=env, notebook=notebook)
+    tr = nt.trace
+    rep = audit_records(
+        tr.records,
+        alpha=alpha,
+        source=str(path),
+        script_error=tr.error,
+        meta={"returncode": tr.returncode, "timed_out": tr.timed_out, "calls": len(tr.records),
+              "notebook": True, "code_cells": nt.cells, "notes": nt.notes},
+    )
+    if nt.notes:
+        rep.script_findings.append(
+            Finding(
+                "notebook_syntax",
+                Severity.INFO,
+                f"{len(nt.notes)} IPython-only line(s) were skipped or rewritten before running",
+                "; ".join(nt.notes[:10]) + (" ..." if len(nt.notes) > 10 else ""),
+                {"notes": nt.notes[:100]},
+            )
+        )
+    return rep
 
 
 def audit_ttest(a: Any, b: Any, equal_var: bool = True, alpha: float = 0.05, **kwargs: Any) -> Report:

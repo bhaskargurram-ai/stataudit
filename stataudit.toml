@@ -1,0 +1,11 @@
+# stataudit's own configuration (dogfooding; see docs/REFERENCE.md for every key).
+#
+# The bundled examples are deliberately flawed, so the card on this
+# repository's pull requests reports problems by design: it shows what
+# stataudit finds, and `fail_on = "never"` keeps CI green.
+
+alpha = 0.05
+fail_on = "never"
+run = ["examples/0*.py", "examples/*.ipynb"]
+reports = ["examples/reports/**/*.md"]
+lint = ["examples/**/*.py", "examples/**/*.ipynb"]
