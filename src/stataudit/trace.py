@@ -51,6 +51,7 @@ __all__ = [
     "Recording",
     "TraceResult",
     "trace_script",
+    "run_bootstrap",
     "save_record",
     "load_records",
 ]
@@ -589,43 +590,76 @@ def trace_script(
     timeout: float | None = 300,
     cwd: str | os.PathLike[str] | None = None,
     python: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> TraceResult:
     """Run ``script`` in a fresh Python subprocess and record its statistical calls.
 
     The script runs exactly as ``python script.py args...`` would (``__name__``
     is ``"__main__"``, ``sys.argv`` is set, the script directory is on
     ``sys.path``). Only the given file is executed; no shell is involved.
+    ``env`` replaces the inherited environment (used to run untrusted code
+    with a scrubbed environment).
     """
     script_path = Path(script).resolve()
     if not script_path.is_file():
         raise FileNotFoundError(f"script not found: {script}")
+    return run_bootstrap([str(script_path), *map(str, args)], str(script_path), timeout=timeout, cwd=cwd,
+                         python=python, env=env)
+
+
+def run_bootstrap(
+    bootstrap_args: list[str],
+    label: str,
+    timeout: float | None = 300,
+    cwd: str | os.PathLike[str] | None = None,
+    python: str | None = None,
+    env: dict[str, str] | None = None,
+    prepare: Callable[[str], list[str]] | None = None,
+) -> TraceResult:
+    """Run ``python -m stataudit.bootstrap OUT_DIR <bootstrap_args>`` and collect the trace.
+
+    ``prepare(tmpdir)`` may write extra input files into the trace directory
+    and return the bootstrap arguments to use instead of ``bootstrap_args``.
+    The child is started in its own process group and the whole group is
+    killed when ``timeout`` expires.
+    """
     with tempfile.TemporaryDirectory(prefix="stataudit-") as tmp:
-        env = dict(os.environ)
-        env["PYTHONPATH"] = os.pathsep.join(p for p in (_src_root(), env.get("PYTHONPATH", "")) if p)
-        env.setdefault("MPLBACKEND", "Agg")
-        env["PYTHONIOENCODING"] = env.get("PYTHONIOENCODING", "utf-8")
-        cmd = [python or sys.executable, "-m", "stataudit.bootstrap", tmp, str(script_path), *map(str, args)]
-        result = TraceResult(script=str(script_path))
+        base_env = dict(os.environ if env is None else env)
+        base_env["PYTHONPATH"] = os.pathsep.join(p for p in (_src_root(), base_env.get("PYTHONPATH", "")) if p)
+        base_env.setdefault("MPLBACKEND", "Agg")
+        base_env["PYTHONIOENCODING"] = base_env.get("PYTHONIOENCODING", "utf-8")
+        if prepare is not None:
+            bootstrap_args = prepare(tmp)
+        cmd = [python or sys.executable, "-m", "stataudit.bootstrap", tmp, *bootstrap_args]
+        result = TraceResult(script=label)
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(cwd) if cwd else None,
+            env=base_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            start_new_session=(os.name == "posix"),
+        )
         try:
-            proc = subprocess.run(
-                cmd,
-                cwd=str(cwd) if cwd else None,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                stdin=subprocess.DEVNULL,
-            )
+            out, err = proc.communicate(timeout=timeout)
             result.returncode = proc.returncode
-            result.stdout, result.stderr = proc.stdout, proc.stderr
-        except subprocess.TimeoutExpired as exc:
+            result.stdout, result.stderr = out or "", err or ""
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            try:
+                out, err = proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:  # pragma: no cover - defensive
+                out, err = "", ""
             result.timed_out = True
             result.error = f"script timed out after {timeout} s; showing calls recorded before the timeout"
-            result.stdout = (exc.stdout or b"").decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-            result.stderr = (exc.stderr or b"").decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            result.stdout, result.stderr = out or "", err or ""
         result.records = load_records(tmp)
         status_file = Path(tmp) / "status.json"
-        if status_file.exists():
+        if status_file.exists() and not result.timed_out:
             try:
                 status = json.loads(status_file.read_text(encoding="utf-8"))
                 if status.get("error"):
@@ -636,3 +670,19 @@ def trace_script(
             tail = "\n".join(result.stderr.strip().splitlines()[-15:])
             result.error = f"tracer exited with code {result.returncode}\n{tail}".strip()
     return result
+
+
+def _kill_group(proc: "subprocess.Popen[str]") -> None:
+    """Kill the child and everything it started (POSIX process group), or just the child elsewhere."""
+    try:
+        if os.name == "posix":
+            import signal
+
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:  # pragma: no cover - Windows
+            proc.kill()
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
