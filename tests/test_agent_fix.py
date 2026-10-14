@@ -225,6 +225,24 @@ class TestCompare(unittest.TestCase):
         self.assertTrue(v.accepted, v.reasons)
         self.assertEqual(v.rows[0]["matched_by"], "named replacement")
 
+    def test_same_call_site_matches_when_the_data_change(self):
+        import numpy as np
+
+        from stataudit.models import CallSite
+
+        rng = np.random.default_rng(7)
+        control = rng.normal(12.0, 1.5, 60).round(1)
+        treated = np.concatenate([rng.normal(12.2, 1.5, 11), [21.5, 24.0, 26.5]]).round(1)
+        line = "res = stats.ttest_ind(treated, control, equal_var=False)"
+        before = stataudit.audit_call("ttest_ind", [treated, control], {"equal_var": False}, label="a.py")
+        after = stataudit.audit_call("ttest_ind", [treated[:-3], control], {"equal_var": False}, label="a.py")
+        before.results[0].call.site = CallSite("a.py", 25, code=line)
+        after.results[0].call.site = CallSite("a.py", 26, code=line)
+        v = fx.compare_reports(before, after)
+        self.assertEqual(v.rows[0]["matched_by"], "same call site")
+        after.results[0].call.site = CallSite("a.py", 26, code=line.replace("treated", "t2"))
+        self.assertEqual(fx.compare_reports(before, after).rows[0]["outcome"], "dropped")
+
     def test_no_improvement_is_rejected(self):
         rep = stataudit.audit_script(EXAMPLES / "04_many_tests.py")
         self.assertIs(rep.status, Status.FRAGILE)

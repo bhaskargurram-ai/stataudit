@@ -131,10 +131,11 @@ The candidate is **accepted** only if all of these hold:
 
 1. it runs to completion (no exception, no timeout);
 2. every result the original audit judged is still answered: by a test on the
-   **same data** (same data fingerprint), or by a call the model explicitly
-   named in `replacements` (`{"original_location": "analysis.py:25",
-   "patched_location": "analysis.py:27"}`), for example when it transformed
-   the data;
+   **same data** (same data fingerprint), by the **same, unchanged line of
+   code** (for example when the data were cleaned before it), or by a call the
+   model explicitly named in `replacements` (`{"original_location":
+   "analysis.py:25", "patched_location": "analysis.py:27"}`), for example when
+   it rewrote the call on transformed data;
 3. each of those answers **holds**, or its status improved
    (does not hold → fragile → holds);
 4. no new critical finding appears, and the patch adds no new test that is
@@ -268,9 +269,10 @@ Token usage is reported (`usage` in the JSON output, `usage` per proposal in
 * Only analyses that `stataudit run` can trace can be verified (scipy.stats
   tests and statsmodels OLS). A fix that moves the analysis to a library
   stataudit does not trace is "no longer answered" and is rejected.
-* Matching an original test to its replacement uses the data fingerprint or
-  the model's explicit `replacements`; a fix that changes the data (for
-  example a log transform) is only accepted when the model names the
+* Matching an original test to its replacement uses the data fingerprint, an
+  unchanged line of code, or the model's explicit `replacements`; a fix that
+  changes both the data and the call (for example a rank test on
+  log-transformed data) is only accepted when the model names the
   replacement.
 * The success rate on real analyses and real models has not been measured.
 * The static denylist can have false positives (the model is told why and can

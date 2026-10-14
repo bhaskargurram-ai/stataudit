@@ -11,8 +11,8 @@ A candidate is **accepted** only if all of these hold:
 
 * the patched analysis runs to completion (no exception, no timeout);
 * every result the original audit judged is still answered: by a test on the
-  same data (same data fingerprint), or by a call the model explicitly named as
-  its replacement (``replacements``);
+  same data (same data fingerprint), by the same unchanged call site, or by a
+  call the model explicitly named as its replacement (``replacements``);
 * each of those answers *holds*, or its status improved
   (does not hold -> fragile -> holds);
 * no new critical finding appears, and no new test that is fragile or does not
@@ -253,6 +253,12 @@ def compare_reports(before: Report, after: Report, replacements: Sequence[Mappin
             same.sort(key=lambda a: (a.call.func != b.call.func, a.call.index))
             if same:
                 match, how = same[0], "same data"
+        if match is None and b.call.site and b.call.site.code:
+            # the same, unchanged line of code (e.g. the data were cleaned before it), same loop iteration
+            same = [a for a in news if id(a) not in used and a.call.site and a.call.site.code == b.call.site.code
+                    and a.call.func == b.call.func and a.target == b.target and a.occurrence == b.occurrence]
+            if same:
+                match, how = same[0], "same call site"
         row: dict[str, Any] = {
             "location": b.location,
             "before_test": b.test_label,
