@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 380" width="1000" height="380" role="img" aria-labelledby="t d">
   <title id="t">stataudit fix: propose, gate, verify</title>
-  <desc id="d">The experimental fix agent. The model sees the script as text, the audit findings and a data summary (column names, dtypes and n; raw rows only with --share-data). It proposes a patch through read-only tools and a schema-checked submit; this step holds the API key and runs nothing. A static gate rejects patches that do not parse or that import os, subprocess, socket, shutil, ctypes or importlib, or use eval, exec, __import__ or open for writing. stataudit then runs the patched script through the tracer in a subprocess with a timeout and no secrets, and accepts it only if the same questions are answered, the tests hold or improve, and no new critical findings appear. A verified fix is shown as a diff with before and after verdicts and is written only with --apply; otherwise the findings are fed back for up to two rounds, and if nothing verifies the plain audit report stands.</desc>
+  <desc id="d">The experimental fix agent. The model sees the script as text, the audit findings and a data summary (n, missing values, mean, standard deviation and CSV columns; raw values only with --share-data). It proposes a patch through read-only tools and a schema-checked submit; this step holds the API key and runs nothing. A static gate rejects patches that do not parse or that import os, subprocess, socket, shutil, ctypes or importlib, or use eval, exec, __import__ or open for writing. stataudit then runs the patched script through the tracer in a subprocess with a timeout and no secrets, and accepts it only if the same questions are answered, the tests hold or improve, and no new critical findings appear. A verified fix is shown as a diff with before and after verdicts and is written only with --apply or --out; otherwise the findings are fed back for up to two rounds, and if nothing verifies the plain audit report stands.</desc>
   <style>
     svg { --bg:#ffffff; --edge:#d5dae1; --ink:#1b1f24; --muted:#5b6470; --box:#f5f7f9; --arrow:#8a93a0;
           --accent:#3557c4; --accent-bg:#e9eefc; --ok:#1a7f37; --ok-bg:#e3f4e8; --warn:#9a6700; --warn-bg:#fff3d1;
@@ -69,9 +69,9 @@
   <text class="h2 mono" x="44" y="175" font-size="12.5">findings.json</text>
   <text class="small" x="44" y="191">the audit result</text>
   <rect class="inner" x="32" y="208" width="152" height="44" rx="7"/>
-  <text class="h2 mono" x="44" y="227" font-size="12.5">data summary</text>
-  <text class="small" x="44" y="243">columns, dtypes, n</text>
-  <text class="small" x="34" y="274">raw rows: only --share-data</text>
+  <text class="h2 mono" x="44" y="227" font-size="12.5">data summaries</text>
+  <text class="small" x="44" y="243">n, mean, sd; CSV columns</text>
+  <text class="small" x="34" y="274">raw values: --share-data</text>
   <rect class="agent" x="220" y="62" width="168" height="230" rx="10"/>
   <circle class="numc" cx="244" cy="84" r="11"/><text class="num" x="244" y="88.2" text-anchor="middle">1</text>
   <text class="h" x="262" y="89">Propose</text>
@@ -112,7 +112,7 @@
   <text class="okh" x="856" y="87">verified fix</text>
   <text class="okl" x="856" y="110">diff + before/after</text>
   <text class="okl" x="856" y="128">verdicts; written</text>
-  <text class="okl" x="856" y="146">only with --apply</text>
+  <text class="okl" x="856" y="146">with --apply or --out</text>
   <rect class="warnbox" x="842" y="186" width="138" height="106" rx="10"/>
   <text class="warnh" x="856" y="211">no fix</text>
   <text class="okl" x="856" y="234">the plain audit</text>

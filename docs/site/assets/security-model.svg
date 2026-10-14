@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 486" width="1000" height="486" role="img" aria-labelledby="t d">
   <title id="t">stataudit on GitHub: which job can do what</title>
-  <desc id="d">Four jobs and their capabilities. The check job runs on pull_request: it runs PR code (lint, check-report, and run on opted-in globs) with a read-only token and no secrets, and hands on result.json and card.md. The optional agent propose job runs on workflow_run, holds the LLM API key, reads PR files as data and never runs PR code; it hands on a patch. The agent verify job runs the patched script with no secrets, in a separate job on a separate VM. The comment job runs on workflow_run with a write token, never checks out PR code, validates result.json and re-renders the card as one sticky comment. No job both runs PR code and holds a secret or a write token.</desc>
+  <desc id="d">Four jobs and their capabilities. The check job runs on pull_request: it runs PR code (lint, check-report, and run on opted-in globs) with a read-only token and no secrets, and hands on result.json and card.md. The optional agent propose job runs on workflow_run, holds the LLM API key, reads PR files as data and never runs PR code; it hands on candidate fixes. The agent verify job runs the patched script with no secrets, in a separate job on a separate VM. The comment job runs on workflow_run with a write token, never checks out PR code, validates result.json and re-renders the card as one sticky comment. No job both runs PR code and holds a secret or a write token.</desc>
   <style>
     svg { --bg:#ffffff; --edge:#d5dae1; --ink:#1b1f24; --muted:#5b6470; --box:#f5f7f9; --arrow:#8a93a0;
           --accent:#3557c4; --accent-bg:#e9eefc; --ok:#1a7f37; --ok-bg:#e3f4e8; --warn:#9a6700; --warn-bg:#fff3d1;
@@ -76,7 +76,7 @@
   <rect class="c-grey" x="486" y="190" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="536.0" y="207.3" text-anchor="middle">no</text>
   <rect class="c-acc" x="602" y="190" width="100" height="26" rx="13.0"/><text class="chip t-acc" x="652.0" y="207.3" text-anchor="middle">LLM key</text>
   <rect class="c-grey" x="718" y="190" width="100" height="26" rx="13.0"/><text class="chip t-grey" x="768.0" y="207.3" text-anchor="middle">no</text>
-  <text class="hand mono" x="846" y="200">patch.diff</text>
+  <text class="hand mono" x="846" y="200">candidates/</text>
   <rect class="zone2" x="18" y="258" width="964" height="86" rx="10"/>
   <text class="h" x="34" y="286">agent: verify</text>
   <text class="sub" x="34" y="308">runs the patched script</text>
