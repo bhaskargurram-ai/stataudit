@@ -140,12 +140,15 @@ def parse_config(data: dict[str, Any], source: str = "") -> Config:
     return c
 
 
-def _from_text(text: str, name: str) -> Config:
+def _from_text(text: str, name: str, pyproject: bool | None = None) -> Config:
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{name}: {exc}") from exc
-    if name.endswith("pyproject.toml"):
+    # Decide by the file name, not the label: labels for files read from git look like "pyproject.toml@<sha>".
+    if pyproject is None:
+        pyproject = Path(name).name == "pyproject.toml"
+    if pyproject:
         data = (data.get("tool") or {}).get("stataudit") or {}
         if not data:
             return Config(source="defaults")
@@ -185,7 +188,7 @@ def load_config(repo: str | Path = ".", path: str | None = None, rev: str | None
             if path:
                 raise ConfigError(f"configuration file not found: {name}" + (f" at {rev}" if rev else ""))
             continue
-        cfg = _from_text(text, label)
+        cfg = _from_text(text, label, pyproject=Path(name).name == "pyproject.toml")
         if cfg.source != "defaults" or name != "pyproject.toml":
             return cfg
     return Config()

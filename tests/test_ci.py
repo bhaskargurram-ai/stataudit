@@ -167,6 +167,22 @@ class TestConfig(TempDirMixin, unittest.TestCase):
         Path(self.tmp, "stataudit.toml").write_text("alpha = 0.02\n")
         self.assertEqual(load_config(self.tmp).alpha, 0.02)
 
+    def test_pyproject_from_a_git_revision(self):
+        # In CI the config is read from the base commit; a plain pyproject.toml
+        # (no [tool.stataudit]) must give the defaults, not be parsed as the config.
+        repo = Path(self.tmp, "r")
+        repo.mkdir()
+        git(repo, "init", "-q")
+        Path(repo, "pyproject.toml").write_text('[build-system]\nrequires = ["x"]\n[project]\nname = "x"\n')
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "plain pyproject")
+        plain = git(repo, "rev-parse", "HEAD")
+        self.assertEqual(load_config(repo, rev=plain).source, "defaults")
+        Path(repo, "pyproject.toml").write_text('[project]\nname = "x"\n[tool.stataudit]\nalpha = 0.01\n')
+        git(repo, "commit", "-q", "-am", "configured")
+        cfg = load_config(repo, rev=git(repo, "rev-parse", "HEAD"))
+        self.assertEqual(cfg.alpha, 0.01)
+
     def test_glob(self):
         self.assertTrue(glob_match("analysis/a.py", "analysis/**/*.py"))
         self.assertTrue(glob_match("analysis/x/y/a.py", "analysis/**/*.py"))
