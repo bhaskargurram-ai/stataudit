@@ -134,7 +134,7 @@ stataudit report — examples/01_ttest_outliers.py
 ```bash
 pip install stataudit
 # or, straight from GitHub:
-pip install "git+https://github.com/bhaskargurram-ai/stataudit@v1.0.2"
+pip install "git+https://github.com/bhaskargurram-ai/stataudit@v1.0.3"
 
 pip install "stataudit[web]"          # + Flask for the local web UI
 pip install "stataudit[mcp]"          # + the MCP server
@@ -365,7 +365,7 @@ The server treats its inputs as data: it accepts only known test names and numer
 
 ## GitHub integration
 
-stataudit runs on pull requests as separate workflows, so that PR code and privileged tokens never share a job ([why](#security-model)). Each caller is a few lines pointing at a reusable workflow in this repository; `stataudit init` writes them for you, and [`examples/workflows/`](https://github.com/bhaskargurram-ai/stataudit/tree/main/examples/workflows) holds exactly what `stataudit init --agent` writes (a test keeps the two in sync). Pin `@v1.0.2`, or a full commit SHA if you want to be strict, and keep `stataudit-ref` the same.
+stataudit runs on pull requests as separate workflows, so that PR code and privileged tokens never share a job ([why](#security-model)). Each caller is a few lines pointing at a reusable workflow in this repository; `stataudit init` writes them for you, and [`examples/workflows/`](https://github.com/bhaskargurram-ai/stataudit/tree/main/examples/workflows) holds exactly what `stataudit init --agent` writes (a test keeps the two in sync). Pin `@v1.0.3`, or a full commit SHA if you want to be strict, and keep `stataudit-ref` the same.
 
 **`.github/workflows/stataudit.yml`** checks the pull request. It is unprivileged, and it is the only place PR code runs.
 
@@ -385,9 +385,9 @@ concurrency:
 
 jobs:
   check:
-    uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.2
+    uses: bhaskargurram-ai/stataudit/.github/workflows/check.yml@v1.0.3
     with:
-      stataudit-ref: v1.0.2
+      stataudit-ref: v1.0.3
       python-version: "3.12"
       # Installs what the analyses import (runs PR code, unprivileged job). numpy, scipy
       # and pandas are already there.
@@ -423,9 +423,9 @@ jobs:
       contents: read
       actions: read          # download the artifact of the triggering run
       pull-requests: write   # upsert the comment and the label
-    uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.2
+    uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.3
     with:
-      stataudit-ref: v1.0.2
+      stataudit-ref: v1.0.3
       labels: true
 ```
 
@@ -451,9 +451,9 @@ jobs:
       contents: read
       actions: read
       pull-requests: read
-    uses: bhaskargurram-ai/stataudit/.github/workflows/agent.yml@v1.0.2
+    uses: bhaskargurram-ai/stataudit/.github/workflows/agent.yml@v1.0.3
     with:
-      stataudit-ref: v1.0.2
+      stataudit-ref: v1.0.3
       llm-provider: ${{ vars.STATAUDIT_LLM_PROVIDER }}
       llm-model: ${{ vars.STATAUDIT_LLM_MODEL }}
       llm-base-url: ${{ vars.STATAUDIT_LLM_BASE_URL }}
@@ -471,9 +471,9 @@ jobs:
       contents: read
       actions: read
       pull-requests: write
-    uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.2
+    uses: bhaskargurram-ai/stataudit/.github/workflows/comment.yml@v1.0.3
     with:
-      stataudit-ref: v1.0.2
+      stataudit-ref: v1.0.3
       # Trusted values: the PR number comes from the gate job (API data, no PR
       # code ran there) and the artifact from this run's verify job.
       pr-number: ${{ needs.agent.outputs.pr-number }}
@@ -485,7 +485,7 @@ When the check finds an analysis that is fragile or does not hold, the agent wor
 
 </details>
 
-Because `workflow_run` workflows always run from the default branch, merge the workflow files there before the comment and agent workflows act on pull requests. A composite action (`uses: bhaskargurram-ai/stataudit@v1.0.2` with `command: ci | summary | comment | agent-propose | agent-verify`) is available for custom setups; see [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md#composite-action-actionyml).
+Because `workflow_run` workflows always run from the default branch, merge the workflow files there before the comment and agent workflows act on pull requests. A composite action (`uses: bhaskargurram-ai/stataudit@v1.0.3` with `command: ci | summary | comment | agent-propose | agent-verify`) is available for custom setups; see [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md#composite-action-actionyml).
 
 ## Security model
 
