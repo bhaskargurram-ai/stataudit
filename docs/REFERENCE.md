@@ -154,6 +154,18 @@ reference distribution (U, W, H, ...), and exact values of corrected p-values.
 | SA105 | `test-shopping` | warn | the same data expressions passed to ≥ 3 different test functions |
 | SA106 | `p-threshold-selection` | warn | `p < 0.05`-style comparisons (p-value names or `.pvalue` against a constant ≤ 0.1 or `alpha`) where SA101's conditions hold |
 | SA107 | `normality-pretest` | info | an `if` whose condition uses a normality test (`shapiro`, `normaltest`, `jarque_bera`, `anderson`, ...) chooses between hypothesis tests |
+| SA201 | `preprocessing-before-split` | warn | a scaler, imputer, encoder, vectorizer or PCA is fitted on data that is split or cross-validated afterwards, and what it learned reaches the evaluation (its output is split, or it transforms data after the split) |
+| SA202 | `selection-before-split` | warn | a feature selector (`SelectKBest`, `RFE`, `SelectFromModel`, ...) is fitted on data that is split or cross-validated afterwards |
+| SA203 | `test-set-used-for-fitting` | warn | a model or transformer is fitted on a test-named split (`X_test`, `test_df`, ...), or a loop fits models and compares their scores on the test split |
+| SA204 | `resampling-before-split` | warn | SMOTE or another resampler runs before the split |
+
+The SA2xx rules follow variable names through the file in source order (no
+control flow). A fit counts as leaking only if what it learned reaches the
+evaluation: its output is what gets split, or the fitted object transforms or
+predicts after the split. Fitting a pipeline and then passing it to
+`cross_val_score` is fine, because cross-validation refits a clone on each
+training fold. Names ending in `_train`/`_tr` count as training data, and
+`X_test`, `test_df`, names ending in `_test`/`_te` as test data.
 
 Every finding has the rule's explanation and a suggested fix (`-v`, JSON).
 Suppress one with a comment on the reported line: `# stataudit: ignore` or

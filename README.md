@@ -277,7 +277,7 @@ Options: `--alpha`, `--fail-on inconsistent|gross|never` (default `inconsistent`
 
 ## Linting without running (`lint`)
 
-Some analysis code can't be run in CI: the data is private, too large or behind a VPN. `stataudit lint` reads `.py` and `.ipynb` files as a syntax tree, executes nothing and needs no data, so it is fast enough for every pull request.
+Some analysis code can't be run in CI: the data is private, too large or behind a VPN. `stataudit lint` reads `.py` and `.ipynb` files as a syntax tree, executes nothing and needs no data, so it is fast enough for every pull request. Rules SA1xx cover hypothesis testing; SA2xx cover train/test leakage in machine-learning evaluation, the most common reason published ML results fail to reproduce (Kapoor & Narayanan, *Patterns* 2023).
 
 | Rule | Name | Severity | Fires when |
 |---|---|---|---|
@@ -288,6 +288,10 @@ Some analysis code can't be run in CI: the data is private, too large or behind 
 | SA105 | `test-shopping` | warn | the same data passed to 3 or more different test functions |
 | SA106 | `p-threshold-selection` | warn | `p < 0.05`-style comparisons where SA101's conditions hold |
 | SA107 | `normality-pretest` | info | a normality test in an `if` chooses which hypothesis test runs |
+| SA201 | `preprocessing-before-split` | warn | a scaler, imputer, encoder, vectorizer or PCA is fitted on data that is split or cross-validated afterwards, and what it learned reaches the evaluation (its output is split, or it transforms data after the split) |
+| SA202 | `selection-before-split` | warn | a feature selector (`SelectKBest`, `RFE`, `SelectFromModel`, ...) is fitted on data that is split or cross-validated afterwards |
+| SA203 | `test-set-used-for-fitting` | warn | a model or transformer is fitted on a test-named split (`X_test`, `test_df`, ...), or a loop fits models and compares their scores on the test split |
+| SA204 | `resampling-before-split` | warn | SMOTE or another resampler runs before the split |
 
 ```text
 $ stataudit lint examples/04_many_tests.py

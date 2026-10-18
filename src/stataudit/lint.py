@@ -23,6 +23,13 @@ SA105       test-shopping                  the same data passed to ≥ 3 differe
 SA106       p-threshold-selection          ``p < 0.05``-style comparisons that select results among
                                            many tests (or inside a loop) without a correction
 SA107       normality-pretest              a normality test's p-value decides which test runs
+SA201       preprocessing-before-split     a scaler, imputer, encoder or PCA is fitted on data that is
+                                           split afterwards, and its result reaches the evaluation
+SA202       selection-before-split         a feature selector is fitted on data that is split or
+                                           cross-validated afterwards
+SA203       test-set-used-for-fitting      a model or transformer is fitted on the test split, or a
+                                           loop chooses between models by their test-split score
+SA204       resampling-before-split        oversampling/undersampling (SMOTE, ...) before the split
 ==========  =============================  ========================================================
 
 Suppress a finding with a comment on the reported line:
@@ -37,6 +44,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
+
+from .leakage import find_leakage
 
 __all__ = ["RULES", "Rule", "LintFinding", "LintReport", "lint_source", "lint_file", "lint_notebook"]
 
@@ -114,6 +123,40 @@ RULES: dict[str, Rule] = {
             "power in small samples and too much in large ones.",
             "Decide on the test from the design and the scale of the data, or run the robust test (Welch, "
             "Mann-Whitney, permutation) directly; use plots rather than p-values to judge normality.",
+        ),
+        Rule(
+            "SA201", "preprocessing-before-split", "warn",
+            "Preprocessing fitted on the full data before the train/test split",
+            "A scaler, imputer, encoder or dimensionality reduction fitted before the split learns its statistics "
+            "(means, variances, vocabularies, components) from the test rows too, so the test score no longer "
+            "measures performance on unseen data. This is the most common kind of leakage in published ML studies.",
+            "Split first and fit the transformer on the training split only, or put it in a scikit-learn "
+            "`Pipeline` and cross-validate the whole pipeline.",
+        ),
+        Rule(
+            "SA202", "selection-before-split", "warn",
+            "Feature selection on the full data before the split or cross-validation",
+            "Choosing features with the labels of all rows and then cross-validating on those features is a "
+            "classic way to get high accuracy on pure noise (Ambroise & McLachlan, PNAS 2002): the test rows "
+            "helped choose the features.",
+            "Do the selection inside the cross-validation loop, e.g. `make_pipeline(SelectKBest(...), model)` "
+            "passed to `cross_val_score`.",
+        ),
+        Rule(
+            "SA203", "test-set-used-for-fitting", "warn",
+            "The test split is used for fitting or model selection",
+            "A model, transformer or hyperparameter chosen with the test split has seen it; the reported test "
+            "score is then a training score in disguise.",
+            "Fit only on the training split. Choose models and hyperparameters with a validation split or "
+            "cross-validation on the training data, and evaluate on the test split once.",
+        ),
+        Rule(
+            "SA204", "resampling-before-split", "warn",
+            "Oversampling or undersampling before the split",
+            "SMOTE and random oversampling create rows from existing ones. Done before the split, synthetic "
+            "neighbours of test rows (or exact copies) land in the training data, which inflates the test score.",
+            "Resample the training split only, or use `imblearn.pipeline.Pipeline` so that resampling happens "
+            "inside each cross-validation fold.",
         ),
     )
 }
@@ -531,6 +574,9 @@ def analyze(tree: ast.Module, lines: list[str]) -> tuple[list[LintFinding], int]
         if body_tests & TEST_FUNCS:
             add("SA107", node, "The result of a normality test chooses between "
                                f"{', '.join(sorted(body_tests & TEST_FUNCS))}.")
+    # SA201-SA204: train/test leakage
+    for leak in find_leakage(tree):
+        add(leak.rule, leak.node, leak.message)
     return findings, n_tests
 
 

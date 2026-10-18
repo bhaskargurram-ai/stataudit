@@ -23,7 +23,7 @@ def rules(src: str, **kw) -> list[str]:
 class TestRules(unittest.TestCase):
     def test_every_rule_documented(self):
         for r in RULES.values():
-            self.assertRegex(r.id, r"^SA1\d\d$")
+            self.assertRegex(r.id, r"^SA[12]\d\d$")
             self.assertTrue(r.explanation and r.fix and r.summary)
             self.assertIn(r.severity, ("warn", "info"))
 
