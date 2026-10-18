@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use stataudit in your work, please cite it using these metadata."
+type: software
+title: "stataudit: Statistical-conclusion auditing for analysis code"
+abstract: "Check AI-written statistics with evidence: re-run the analysis, audit each test's assumptions on the real data, recompute reported p-values, lint analysis code, and verify proposed fixes."
+authors:
+  - family-names: Gurram
+    given-names: Bhaskar
+version: "1.0.2"
+date-released: "2026-10-14"
+license: MIT
+repository-code: "https://github.com/bhaskargurram-ai/stataudit"
+url: "https://pypi.org/project/stataudit/"
+keywords:
+  - "statistics"
+  - "reproducibility"
+  - "hypothesis testing"
+  - "data analysis"
+  - "auditing"
