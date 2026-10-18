@@ -25,7 +25,7 @@ It doesn't matter whether a person or an AI assistant wrote the analysis. statau
 </p>
 
 > [!NOTE]
-> **Status: stable (1.x).** stataudit traces 13 `scipy.stats` tests plus statsmodels OLS, in scripts and Jupyter notebooks. It also recomputes p-values reported in text (`check-report`), lints analysis code without running it (`lint`), and runs all three on pull requests. The agent (`fix`, `explain`) is **experimental and off by default**; it needs your own LLM API key, and nothing it writes counts until stataudit has run it. The full reference for every command, option and key is [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md).
+> **Status: beta.** Releases are numbered 1.x, but there are no confirmed outside users yet, so details may still change. stataudit traces 13 `scipy.stats` tests plus statsmodels OLS, in scripts and Jupyter notebooks. It also recomputes p-values reported in text (`check-report`), lints analysis code without running it (`lint`), and runs all three on pull requests. The agent (`fix`, `explain`) is **experimental and off by default**; it needs your own LLM API key, and nothing it writes counts until stataudit has run it. The full reference for every command, option and key is [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md).
 
 ## Contents
 
@@ -44,6 +44,7 @@ It doesn't matter whether a person or an AI assistant wrote the analysis. statau
 - [How stataudit compares](#how-stataudit-compares)
 - [Configuration](#configuration) · [CLI reference](#cli-reference)
 - [FAQ](#faq) · [Limitations](#limitations) · [Roadmap](#roadmap)
+- [Verification toolkit](#part-of-a-verification-toolkit) · [How to cite](#how-to-cite)
 - [Contributing](#contributing) · [License](#license)
 
 ## Why audit an analysis?
@@ -703,6 +704,18 @@ Only Python is traced today. `check-report` works on any text, whatever produced
 - Bootstrap confidence intervals for effect sizes
 - A published benchmark of the fix agent on analyses with known problems
 
+## Part of a verification toolkit
+
+stataudit is one of three tools for checking whether scientific and ML computations are actually correct, including code written with AI assistance:
+
+- **[numguard](https://github.com/bhaskargurram-ai/numguard)** (`pip install numguard-ci`): Is the arithmetic right on edge cases: NaN, ±inf, overflow, subnormals, cancellation, low precision?
+- **stataudit** (`pip install stataudit`, this package): Does a statistical conclusion survive its own data, given test assumptions, alternatives and multiple comparisons?
+- **[proofcheck](https://github.com/bhaskargurram-ai/proofcheck)** (`pip install proofcheck-ai`): Does a code change do what it claims: fail-to-pass tests, reproducer replay, claim-to-evidence mapping?
+
+## How to cite
+
+If you use stataudit in research, please cite it. The repository's [`CITATION.cff`](https://github.com/bhaskargurram-ai/stataudit/blob/main/CITATION.cff) has the metadata; GitHub's "Cite this repository" button turns it into APA or BibTeX.
+
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/CONTRIBUTING.md). In short: every new check needs a test showing that it flags a bad case and passes a clean one, and every new statistical helper needs a test against an independent calculation.
@@ -712,7 +725,7 @@ pip install -e ".[dev]"
 python -m pytest            # or, without pytest: python -m unittest discover -s tests
 ```
 
-[docs/TESTING.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/TESTING.md) describes every test level, including the agent's scripted fake-LLM tests and the workflow invariant tests. Please report security issues privately through the repository's security advisory form rather than in a public issue.
+[docs/TESTING.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/TESTING.md) describes every test level, including the agent's scripted fake-LLM tests and the workflow invariant tests. Please report security issues privately, as described in [SECURITY.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/SECURITY.md), rather than in a public issue. Everyone taking part is expected to follow the [code of conduct](https://github.com/bhaskargurram-ai/stataudit/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
