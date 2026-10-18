@@ -6,8 +6,8 @@ abstract: "Check AI-written statistics with evidence: re-run the analysis, audit
 authors:
   - family-names: Gurram
     given-names: Bhaskar
-version: "1.0.2"
-date-released: "2026-10-14"
+version: "1.0.3"
+date-released: "2026-10-18"
 license: MIT
 repository-code: "https://github.com/bhaskargurram-ai/stataudit"
 url: "https://pypi.org/project/stataudit/"

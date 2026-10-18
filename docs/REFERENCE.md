@@ -299,7 +299,7 @@ repository (pin them to a release tag or commit SHA):
 
 | Input | Default | |
 |---|---|---|
-| `stataudit-ref` | `v1.0.2` | keep equal to the `@ref` of the workflow |
+| `stataudit-ref` | `v1.0.3` | keep equal to the `@ref` of the workflow |
 | `stataudit-repository` | `bhaskargurram-ai/stataudit` | |
 | `python-version` | `"3.12"` | |
 | `install-command` | `""` | installs what the analyses import (runs PR code; stataudit's virtualenv is first on `PATH`) |
@@ -340,7 +340,7 @@ caller: secret `STATAUDIT_LLM_API_KEY`; variables `STATAUDIT_LLM_PROVIDER`,
 
 ### Composite action (`action.yml`)
 
-`uses: bhaskargurram-ai/stataudit@v1.0.2` with `command:` one of `ci`
+`uses: bhaskargurram-ai/stataudit@v1.0.3` with `command:` one of `ci`
 (default), `summary`, `comment`, `agent-propose`, `agent-verify`. Inputs:
 `base`, `head`, `config`, `fail-on` (`config`), `output-dir`
 (`stataudit-out`), `result` (`stataudit-out/result.json`), `pr-number`,
