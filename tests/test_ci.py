@@ -31,7 +31,7 @@ BASE = "b" * 40
 
 def git(repo: Path, *args: str) -> str:
     out = subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=t", *args],
-                         capture_output=True, text=True, check=True)
+                         capture_output=True, text=True, check=True, encoding="utf-8", errors="replace")
     return out.stdout.strip()
 
 
@@ -39,8 +39,8 @@ def make_repo(root: Path) -> tuple[str, str]:
     """A repository whose second commit adds a flawed analysis, a report and a lint target."""
     root.mkdir(parents=True, exist_ok=True)
     git(root, "init", "-q")
-    (root / "stataudit.toml").write_text('run = ["analysis/*.py"]\nreports = ["reports/*.md"]\nfail_on = "fail"\n')
-    (root / "README.md").write_text("# demo\n")
+    (root / "stataudit.toml").write_text('run = ["analysis/*.py"]\nreports = ["reports/*.md"]\nfail_on = "fail"\n', encoding="utf-8")
+    (root / "README.md").write_text("# demo\n", encoding="utf-8")
     git(root, "add", "-A")
     git(root, "commit", "-qm", "base")
     base = git(root, "rev-parse", "HEAD")
@@ -49,8 +49,8 @@ def make_repo(root: Path) -> tuple[str, str]:
     shutil.copy(EXAMPLES / "05_good_analysis.py", root / "analysis" / "good.py")
     (root / "reports").mkdir()
     shutil.copy(EXAMPLES / "reports" / "results.md", root / "reports" / "results.md")
-    (root / "notes.md").write_text("t(10) = 1.0, p = .01 (not under reports/, so not checked)\n")
-    (root / "scratch.py").write_text("from scipy import stats\nstats.pearsonr([1, 2, 3], [2, 1, 3])\n")
+    (root / "notes.md").write_text("t(10) = 1.0, p = .01 (not under reports/, so not checked)\n", encoding="utf-8")
+    (root / "scratch.py").write_text("from scipy import stats\nstats.pearsonr([1, 2, 3], [2, 1, 3])\n", encoding="utf-8")
     git(root, "add", "-A")
     git(root, "commit", "-qm", "head")
     return base, git(root, "rev-parse", "HEAD")
@@ -96,14 +96,14 @@ class TestRunCI(TempDirMixin, unittest.TestCase):
         data = parse_card_data(text)
         self.assertEqual(data["status"], "fail")
         self.assertEqual(data["pr"], 12)
-        self.assertEqual((out / "pr_number").read_text().strip(), "12")
-        self.assertEqual((out / "head_sha").read_text().strip(), head)
+        self.assertEqual((out / "pr_number").read_text(encoding="utf-8").strip(), "12")
+        self.assertEqual((out / "head_sha").read_text(encoding="utf-8").strip(), head)
 
     def test_config_is_read_from_base(self):
         repo = Path(self.tmp) / "repo"
         base, head = make_repo(repo)
         # the PR switches the run off; the base config still applies
-        (repo / "stataudit.toml").write_text('run = []\n')
+        (repo / "stataudit.toml").write_text('run = []\n', encoding="utf-8")
         git(repo, "commit", "-qam", "weaken")
         head2 = git(repo, "rev-parse", "HEAD")
         result = run_ci(repo, base=base, head=head2)
@@ -126,7 +126,7 @@ class TestRunCI(TempDirMixin, unittest.TestCase):
         repo = Path(self.tmp) / "repo"
         make_repo(repo)
         outside = Path(self.tmp) / "secret.md"
-        outside.write_text("t(10) = 1.0, p = .01\n")
+        outside.write_text("t(10) = 1.0, p = .01\n", encoding="utf-8")
         (repo / "link.md").symlink_to(outside)
         result = run_ci(repo, files=["link.md", "../secret.md", "/etc/x.md"], config=Config(reports=["**/*.md"]))
         self.assertEqual([(r["path"], r["status"]) for r in result["reports"]], [("link.md", "error")])
@@ -147,7 +147,7 @@ class TestRunCI(TempDirMixin, unittest.TestCase):
         summary = Path(self.tmp) / "summary.md"
         res = CliRunner().invoke(cli, ["summary", "--json", str(out / "result.json"), "--out", str(summary)])
         self.assertEqual(res.exit_code, 0, res.output)
-        self.assertIn(CARD_MARKER, summary.read_text())
+        self.assertIn(CARD_MARKER, summary.read_text(encoding="utf-8"))
 
 
 class TestConfig(TempDirMixin, unittest.TestCase):
@@ -162,9 +162,9 @@ class TestConfig(TempDirMixin, unittest.TestCase):
                 parse_config(bad)
 
     def test_pyproject_fallback(self):
-        Path(self.tmp, "pyproject.toml").write_text('[project]\nname="x"\n[tool.stataudit]\nalpha = 0.01\n')
+        Path(self.tmp, "pyproject.toml").write_text('[project]\nname="x"\n[tool.stataudit]\nalpha = 0.01\n', encoding="utf-8")
         self.assertEqual(load_config(self.tmp).alpha, 0.01)
-        Path(self.tmp, "stataudit.toml").write_text("alpha = 0.02\n")
+        Path(self.tmp, "stataudit.toml").write_text("alpha = 0.02\n", encoding="utf-8")
         self.assertEqual(load_config(self.tmp).alpha, 0.02)
 
     def test_pyproject_from_a_git_revision(self):
@@ -173,12 +173,12 @@ class TestConfig(TempDirMixin, unittest.TestCase):
         repo = Path(self.tmp, "r")
         repo.mkdir()
         git(repo, "init", "-q")
-        Path(repo, "pyproject.toml").write_text('[build-system]\nrequires = ["x"]\n[project]\nname = "x"\n')
+        Path(repo, "pyproject.toml").write_text('[build-system]\nrequires = ["x"]\n[project]\nname = "x"\n', encoding="utf-8")
         git(repo, "add", "-A")
         git(repo, "commit", "-q", "-m", "plain pyproject")
         plain = git(repo, "rev-parse", "HEAD")
         self.assertEqual(load_config(repo, rev=plain).source, "defaults")
-        Path(repo, "pyproject.toml").write_text('[project]\nname = "x"\n[tool.stataudit]\nalpha = 0.01\n')
+        Path(repo, "pyproject.toml").write_text('[project]\nname = "x"\n[tool.stataudit]\nalpha = 0.01\n', encoding="utf-8")
         git(repo, "commit", "-q", "-am", "configured")
         cfg = load_config(repo, rev=git(repo, "rev-parse", "HEAD"))
         self.assertEqual(cfg.alpha, 0.01)
@@ -472,7 +472,7 @@ class TestAgentCI(TempDirMixin, unittest.TestCase):
         self.assertIn("disabled", summary["notes"][0])
         self.assertEqual(tr.requests, [])
         # a proposals.json naming a file that was not an analysis of this run is ignored
-        (cands / "proposals.json").write_text(json.dumps({"proposals": [{"index": 0, "path": "scratch.py", "status": "proposed"}]}))
+        (cands / "proposals.json").write_text(json.dumps({"proposals": [{"index": 0, "path": "scratch.py", "status": "proposed"}]}), encoding="utf-8")
         merged = agent_verify(out / "result.json", cands, repo)
         self.assertEqual(merged["agent"]["fixes"], [])
         self.assertIn("not an analysis", merged["agent"]["notes"][-1])

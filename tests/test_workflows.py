@@ -60,7 +60,7 @@ class WorkflowSecurityTest(unittest.TestCase):
             on = wf["on"]
             triggers = on if isinstance(on, (dict, list)) else [on]
             self.assertNotIn("pull_request_target", triggers, path.name)
-            code = "\n".join(ln for ln in path.read_text().splitlines() if not ln.lstrip().startswith("#"))
+            code = "\n".join(ln for ln in path.read_text(encoding="utf-8").splitlines() if not ln.lstrip().startswith("#"))
             self.assertNotIn("pull_request_target", code, path.name)
             for name, job in (wf.get("jobs") or {}).items():
                 for s in steps(job):

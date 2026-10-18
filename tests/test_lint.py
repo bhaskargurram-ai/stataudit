@@ -225,7 +225,7 @@ class TestBehaviour(TempDirMixin, unittest.TestCase):
         js = str(Path(self.tmp) / "l.json")
         res = runner.invoke(cli, ["lint", str(EXAMPLES / "04_many_tests.py"), "--fail-on", "never", "-q", "--json", js])
         self.assertEqual(res.exit_code, 0)
-        data = json.loads(Path(js).read_text())
+        data = json.loads(Path(js).read_text(encoding="utf-8"))
         self.assertEqual([f["rule"] for f in data["findings"]], ["SA101", "SA106"])
         self.assertTrue(all(f["fix"] and f["explanation"] for f in data["findings"]))
         res = runner.invoke(cli, ["lint", str(EXAMPLES / "03_chisq_sparse.py"), "--select", "SA999"])

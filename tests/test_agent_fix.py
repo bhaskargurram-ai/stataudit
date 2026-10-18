@@ -284,7 +284,7 @@ class TestFixCLI(FixBase):
         self.assertEqual(res.exit_code, 0, res.output)
         self.assertEqual(out.read_text(encoding="utf-8"), WELCH)
         self.assertEqual(self.script.read_text(encoding="utf-8"), WELCH)
-        data = json.loads(js.read_text())
+        data = json.loads(js.read_text(encoding="utf-8"))
         self.assertEqual((data["status"], data["before_status"], data["after_status"]), ("verified", "does_not_hold", "holds"))
 
     def test_rejected_fix_writes_nothing(self):
