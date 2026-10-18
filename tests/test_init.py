@@ -22,27 +22,27 @@ class TestInit(TempDirMixin, unittest.TestCase):
         self.assertEqual(res.written, [CHECK_PATH, COMMENT_PATH, CONFIG_PATH])
         for f in res.written:
             self.assertTrue((Path(self.tmp) / f).is_file())
-        self.assertIn(f"check.yml@v{__version__}", (Path(self.tmp) / CHECK_PATH).read_text())
+        self.assertIn(f"check.yml@v{__version__}", (Path(self.tmp) / CHECK_PATH).read_text(encoding="utf-8"))
         cfg = load_config(self.tmp)
         self.assertEqual((cfg.run, cfg.reports, cfg.alpha, cfg.fail_on, cfg.agent_enabled),
                          (["analysis/**/*.py"], ["reports/**/*.md"], 0.05, "fail", False))
         with self.assertRaises(InitError):
             init_repo(self.tmp)
-        before = (Path(self.tmp) / CONFIG_PATH).read_text()
+        before = (Path(self.tmp) / CONFIG_PATH).read_text(encoding="utf-8")
         with self.assertRaises(InitError):
             init_repo(self.tmp, agent=True)  # nothing at all is written when any target exists
         self.assertFalse((Path(self.tmp) / AGENT_PATH).exists())
-        self.assertEqual((Path(self.tmp) / CONFIG_PATH).read_text(), before)
+        self.assertEqual((Path(self.tmp) / CONFIG_PATH).read_text(encoding="utf-8"), before)
         res = init_repo(self.tmp, agent=True, force=True, ref="v1.2.3")
         self.assertIn(AGENT_PATH, res.written)
-        self.assertIn("agent.yml@v1.2.3", (Path(self.tmp) / AGENT_PATH).read_text())
+        self.assertIn("agent.yml@v1.2.3", (Path(self.tmp) / AGENT_PATH).read_text(encoding="utf-8"))
         self.assertTrue(load_config(self.tmp).agent_enabled)
         self.assertTrue(any("STATAUDIT_LLM_API_KEY" in s for s in res.next_steps))
 
     def test_install_command_detection_and_validation(self):
-        Path(self.tmp, "requirements.txt").write_text("statsmodels\n")
+        Path(self.tmp, "requirements.txt").write_text("statsmodels\n", encoding="utf-8")
         self.assertEqual(init_repo(self.tmp).install_command, "pip install -r requirements.txt")
-        self.assertIn("install-command: 'pip install -r requirements.txt'", (Path(self.tmp) / CHECK_PATH).read_text())
+        self.assertIn("install-command: 'pip install -r requirements.txt'", (Path(self.tmp) / CHECK_PATH).read_text(encoding="utf-8"))
         with self.assertRaises(InitError):
             init_repo(self.tmp, force=True, ref="v1;rm -rf /")
         with self.assertRaises(InitError):

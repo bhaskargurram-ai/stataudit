@@ -401,9 +401,9 @@ class TestCheckReportCLI(TempDirMixin, unittest.TestCase):
         res = runner.invoke(cli, ["check-report", str(md), "--fail-on", "never", "-q", "--json", out_json, "--md", out_md,
                                   "--html", out_html])
         self.assertEqual(res.exit_code, 0, res.output)
-        self.assertEqual(json.loads(Path(out_json).read_text())["counts"][INCONSISTENT], 1)
-        self.assertIn("# stataudit check-report", Path(out_md).read_text())
-        self.assertIn("<table>", Path(out_html).read_text())
+        self.assertEqual(json.loads(Path(out_json).read_text(encoding="utf-8"))["counts"][INCONSISTENT], 1)
+        self.assertIn("# stataudit check-report", Path(out_md).read_text(encoding="utf-8"))
+        self.assertIn("<table>", Path(out_html).read_text(encoding="utf-8"))
 
     def test_gross_fails_with_gross_threshold(self):
         md = Path(self.tmp) / "r.md"

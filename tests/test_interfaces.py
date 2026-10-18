@@ -65,9 +65,9 @@ class TestCLI(TempDirMixin, unittest.TestCase):
         res = self.runner.invoke(cli, ["run", str(script), "--html", html, "--md", md, "--json", js])
         self.assertEqual(res.exit_code, 0, res.output)
         self.assertIn("Conclusions hold", res.output)
-        self.assertTrue(Path(html).read_text().startswith("<!doctype html>"))
-        self.assertIn("# stataudit report", Path(md).read_text())
-        self.assertEqual(json.loads(Path(js).read_text())["status"], "holds")
+        self.assertTrue(Path(html).read_text(encoding="utf-8").startswith("<!doctype html>"))
+        self.assertIn("# stataudit report", Path(md).read_text(encoding="utf-8"))
+        self.assertEqual(json.loads(Path(js).read_text(encoding="utf-8"))["status"], "holds")
 
     def test_run_bad_script_exit_1_and_fail_on_never(self):
         script = write_script(self.tmp, BAD)
@@ -112,12 +112,12 @@ class TestCLI(TempDirMixin, unittest.TestCase):
 
     def test_python_dash_m_help(self):
         env = dict(os.environ, PYTHONPATH=str(SRC))
-        out = subprocess.run([sys.executable, "-m", "stataudit", "--help"], capture_output=True, text=True, env=env, cwd=ROOT)
+        out = subprocess.run([sys.executable, "-m", "stataudit", "--help"], capture_output=True, text=True, env=env, cwd=ROOT, encoding="utf-8", errors="replace")
         self.assertEqual(out.returncode, 0, out.stderr)
         for cmd in ("run", "check-data", "check-report", "lint", "fix", "explain", "ci", "summary", "comment", "agent",
                     "init", "ui", "mcp"):
             self.assertIn(cmd, out.stdout)
-        ver = subprocess.run([sys.executable, "-m", "stataudit", "--version"], capture_output=True, text=True, env=env, cwd=ROOT)
+        ver = subprocess.run([sys.executable, "-m", "stataudit", "--version"], capture_output=True, text=True, env=env, cwd=ROOT, encoding="utf-8", errors="replace")
         self.assertIn(stataudit.__version__, ver.stdout)
 
 

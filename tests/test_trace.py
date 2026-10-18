@@ -19,7 +19,7 @@ from stataudit.models import Status
 
 def _zombie(pid: int) -> bool:
     try:
-        return Path(f"/proc/{pid}/stat").read_text().split(")")[-1].split()[0] == "Z"
+        return Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split(")")[-1].split()[0] == "Z"
     except OSError:
         return True
 
@@ -138,7 +138,7 @@ class TestTraceScript(TempDirMixin, unittest.TestCase):
         self.assertTrue(tr.timed_out)
         self.assertIn("timed out", tr.error)
         self.assertEqual(len(tr.records), 1)
-        pid = int(pidfile.read_text())
+        pid = int(pidfile.read_text(encoding="utf-8"))
         for _ in range(50):  # the grandchild was killed with the process group (not left running)
             try:
                 os.kill(pid, 0)
@@ -317,9 +317,9 @@ class TestStatsmodelsHook(TempDirMixin, unittest.TestCase):
 
         pkg = Path(self.tmp) / "fake" / "statsmodels"
         (pkg / "regression").mkdir(parents=True)
-        (pkg / "__init__.py").write_text("")
-        (pkg / "regression" / "__init__.py").write_text("")
-        (pkg / "regression" / "linear_model.py").write_text(FAKE_LINEAR_MODEL)
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "regression" / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "regression" / "linear_model.py").write_text(FAKE_LINEAR_MODEL, encoding="utf-8")
         script = write_script(
             self.tmp,
             """
