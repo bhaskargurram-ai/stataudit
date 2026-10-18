@@ -282,7 +282,10 @@ def lint(files: tuple[str, ...], select: str, ignore: str, md: str | None, json_
     Rules: SA101 uncorrected multiple tests, SA102 Student's t-test without a
     variance check, SA103 Pearson without a plot/outlier check, SA104
     chi-square with small expected counts, SA105 test shopping, SA106 selecting
-    results by p < 0.05 across many tests, SA107 normality pre-testing.
+    results by p < 0.05 across many tests, SA107 normality pre-testing;
+    SA201-SA204 train/test leakage (preprocessing or feature selection fitted
+    before the split, fitting or model selection on the test split,
+    resampling before the split).
     Suppress one with ``# stataudit: ignore[SA102]`` on the reported line.
     """
     from .lint import RULES, lint_file

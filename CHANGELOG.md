@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Leakage rules for `stataudit lint`: SA201 preprocessing (scaler, imputer, encoder, vectorizer, PCA) fitted before the train/test split, SA202 feature selection before the split or cross-validation, SA203 fitting on the test split or choosing models by their test score, SA204 resampling (SMOTE, ...) before the split. A fit counts as leaking only if what it learned reaches the evaluation, so a pipeline passed to `cross_val_score` is not flagged.
+
 ## [1.0.3] - 2026-10-18
 
 ### Changed

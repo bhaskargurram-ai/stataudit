@@ -46,6 +46,7 @@ jobs:
           # the example report has inconsistent results; lint flags the flawed examples
           if stataudit check-report examples/reports/results.md -q; then echo "expected inconsistencies"; exit 1; fi
           if stataudit lint examples/01_ttest_outliers.py -q; then echo "expected lint findings"; exit 1; fi
+          if stataudit lint examples/07_ml_leakage.py -q; then echo "expected leakage findings"; exit 1; fi
           stataudit lint examples/05_good_analysis.py
 
   # The same unit tests on macOS and Windows (one Python version each).
