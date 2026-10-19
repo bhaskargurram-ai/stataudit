@@ -49,7 +49,7 @@ _PRIORITY = {
     "very_small_sample": 9,
 }
 
-_ARTICLE_SKIP = ("Student", "Welch", "Yuen", "Pearson", "Spearman", "Fisher", "Mann", "Wilcoxon", "Kruskal", "Shapiro")
+_ARTICLE_SKIP = ("Student", "Welch", "Yuen", "Pearson", "Spearman", "Fisher", "Mann", "Wilcoxon", "Kruskal", "Shapiro", "Poisson")
 
 
 def decide_status(res: AuditResult) -> Status:

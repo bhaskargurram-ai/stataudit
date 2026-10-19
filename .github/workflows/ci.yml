@@ -37,9 +37,13 @@ jobs:
           python -m stataudit --help
           # flawed analyses must be flagged (exit code 1)
           for f in examples/01_ttest_outliers.py examples/02_pearson_leverage.py \
-                   examples/03_chisq_sparse.py examples/04_many_tests.py examples/06_notebook.ipynb; do
+                   examples/03_chisq_sparse.py examples/04_many_tests.py examples/06_notebook.ipynb \
+                   examples/08_poisson_overdispersion.py; do
             if stataudit run "$f" -q; then echo "expected $f to be flagged"; exit 1; fi
           done
+          # the statsmodels Poisson fit is traced and audited, not just run
+          stataudit run examples/08_poisson_overdispersion.py --json glm.json -q || true
+          python -c "import json; d = json.load(open('glm.json')); r = d['results']; assert d['script_error'] is None and [x['func'] for x in r] == ['statsmodels_glm'] and r[0]['status'] == 'does_not_hold', d"
           # the good analysis must pass, and all report formats must be written
           stataudit run examples/05_good_analysis.py --html report.html --md report.md --json report.json
           test -s report.html && test -s report.md && test -s report.json

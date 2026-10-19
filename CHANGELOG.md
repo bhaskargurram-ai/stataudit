@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The format follows
 
 - A documentation site (MkDocs) published with the landing page under `/docs/`. Its pages include the README's sections and `docs/*.md`, so the two can't drift apart.
 - Poisson and logistic regression auditing: statsmodels `GLM` (Poisson/log and binomial/logit), `Logit` and `Poisson` fits are traced, including the formula API, and `stataudit.audit_glm` audits arrays directly. Checks: overdispersion (with quasi-Poisson standard errors as the recommended alternative), events per predictor and separation in logistic regression (with likelihood-ratio tests, which stay valid where Wald p-values break down), robust (HC0) standard errors and leave-one-out flips. The refit uses numpy IRLS, cross-checked against statsmodels in the tests.
+- `examples/08_poisson_overdispersion.py`: a statsmodels Poisson regression whose significant effect does not survive overdispersion.
 - Leakage rules for `stataudit lint`: SA201 preprocessing (scaler, imputer, encoder, vectorizer, PCA) fitted before the train/test split, SA202 feature selection before the split or cross-validation, SA203 fitting on the test split or choosing models by their test score, SA204 resampling (SMOTE, ...) before the split. A fit counts as leaking only if what it learned reaches the evaluation, so a pipeline passed to `cross_val_score` is not flagged.
 
 ## [1.0.3] - 2026-10-18
