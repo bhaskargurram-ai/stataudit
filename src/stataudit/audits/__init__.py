@@ -8,6 +8,7 @@ from typing import Any, Callable
 from ..models import AuditResult, CallRecord, Finding, Report, Severity, Status
 from .anova import audit_f_oneway
 from .common import Unsupported, new_result
+from .glm import audit_glm_record
 from .contingency import audit_chi2_contingency, audit_fisher_exact
 from .nonparametric import audit_kruskal, audit_mannwhitneyu, audit_shapiro, audit_spearmanr, audit_wilcoxon
 from .regression import audit_linregress, audit_ols_record, audit_pearsonr
@@ -34,6 +35,8 @@ AUDITORS: dict[str, Auditor] = {
     "shapiro": audit_shapiro,
     "ols": audit_ols_record,
     "statsmodels_ols": audit_ols_record,
+    "glm": audit_glm_record,
+    "statsmodels_glm": audit_glm_record,
 }
 
 _LABELS = {
@@ -52,6 +55,8 @@ _LABELS = {
     "shapiro": "Shapiro-Wilk normality test",
     "ols": "OLS regression",
     "statsmodels_ols": "OLS regression",
+    "glm": "Generalized linear model",
+    "statsmodels_glm": "Generalized linear model",
 }
 
 __all__ = ["AUDITORS", "audit_record", "audit_records", "Unsupported"]

@@ -28,6 +28,8 @@ Importable from `stataudit`.
 
 ::: stataudit.audit_ols
 
+::: stataudit.audit_glm
+
 ## Reported numbers and lint
 
 ::: stataudit.check_report_text

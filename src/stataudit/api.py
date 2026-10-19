@@ -186,6 +186,49 @@ def audit_ols(
     return audit_records([rec], alpha=alpha)
 
 
+def audit_glm(
+    X: Any,
+    y: Any,
+    family: str = "poisson",
+    offset: Any = None,
+    names: Sequence[str] | None = None,
+    add_constant: bool = True,
+    alpha: float = 0.05,
+) -> Report:
+    """Fit a Poisson (``family="poisson"``, log link) or logistic (``"binomial"``, logit link)
+    regression of ``y`` on ``X`` and audit every coefficient.
+
+    ``offset`` is added to the linear predictor (e.g. ``np.log(exposure)`` for rates).
+    ``X`` may be a 1-D array, 2-D array or a pandas DataFrame (column names are used).
+    """
+    from .glmfit import glm_fit  # noqa: PLC0415
+
+    if names is None and hasattr(X, "columns"):
+        names = [str(c) for c in X.columns]
+    Xa = np.asarray(X, dtype=float)
+    if Xa.ndim == 1:
+        Xa = Xa[:, None]
+    names = list(names) if names is not None else [f"x{j + 1}" for j in range(Xa.shape[1])]
+    if add_constant and not sx.has_constant(Xa):
+        Xa = sx.add_constant(Xa)
+        names = ["const", *names]
+    ya = np.asarray(y, dtype=float).ravel()
+    fam = family.lower()
+    off = None if offset is None else np.asarray(offset, dtype=float).ravel()
+    fit = glm_fit(Xa, ya, fam, off)
+    inputs: dict[str, Any] = {"X": Xa, "y": ya}
+    if off is not None:
+        inputs["offset"] = off
+    rec = CallRecord(
+        index=0,
+        func="glm",
+        inputs=inputs,
+        params={"exog_names": names, "cov_type": "nonrobust", "family": fam},
+        result={"params": fit.beta.tolist(), "pvalues": fit.pvalues.tolist()},
+    )
+    return audit_records([rec], alpha=alpha)
+
+
 #: Tests supported by :func:`audit_data` and their data layout.
 DATA_TESTS = {
     "ttest_ind": "two groups",

@@ -345,12 +345,12 @@
       <h2>It looks at the data each test received, not the code that called it</h2>
       <p class="intro"><code>ttest_ind(a, b)</code> is fine or not depending on what <code>a</code> and <code>b</code> hold after your filtering. So stataudit runs the analysis and watches. <strong>Fixed rules, not a model, decide each verdict.</strong></p>
       <figure>
-        <div class="diagram"><img src="assets/how-it-works.svg" width="1000" height="440" alt="stataudit run executes a script or notebook in a subprocess and traces every scipy.stats and statsmodels OLS call. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data. Fixed rules then give a verdict: holds, fragile or does not hold. stataudit lint and stataudit check-report run without executing anything. Results go to terminal, HTML, Markdown, JSON and PR comment reports."></div>
+        <div class="diagram"><img src="assets/how-it-works.svg" width="1000" height="440" alt="stataudit run executes a script or notebook in a subprocess and traces every scipy.stats call and statsmodels OLS, Poisson and logistic fit. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data. Fixed rules then give a verdict: holds, fragile or does not hold. stataudit lint and stataudit check-report run without executing anything. Results go to terminal, HTML, Markdown, JSON and PR comment reports."></div>
       </figure>
       <div class="grid steps">
         <div>
           <h3>Trace</h3>
-          <p>Your script or notebook runs in a subprocess with a timeout. Every <code>scipy.stats</code> test and statsmodels OLS fit is recorded with its arrays, options, result and line.</p>
+          <p>Your script or notebook runs in a subprocess with a timeout. Every <code>scipy.stats</code> test and statsmodels OLS, Poisson and logistic fit is recorded with its arrays, options, result and line.</p>
         </div>
         <div>
           <h3>Audit</h3>

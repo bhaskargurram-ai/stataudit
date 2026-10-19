@@ -398,6 +398,122 @@ def _unpatch_statsmodels() -> None:
         pass
 
 
+def _glm_info(model: Any) -> tuple[str, bool, np.ndarray | None]:
+    """(family, weighted, offset) of a statsmodels GLM, Logit or Poisson model."""
+    cls = type(model).__name__
+    weighted = False
+    if cls == "GLM":
+        fam = type(model.family).__name__.lower()
+        link = type(model.family.link).__name__.lower()
+        canonical = (fam == "poisson" and link == "log") or (fam == "binomial" and link == "logit")
+        family = fam if canonical else f"{fam}/{link}"
+        for attr in ("freq_weights", "var_weights"):
+            w = getattr(model, attr, None)
+            if w is not None and np.any(np.asarray(w, dtype=float) != 1.0):
+                weighted = True
+    else:
+        family = "binomial" if cls == "Logit" else "poisson"
+    if np.ndim(getattr(model, "endog", None)) == 2:
+        family = f"{family}/counts"
+    offset = None
+    for attr in ("offset", "exposure"):  # statsmodels stores exposure on the log scale
+        v = getattr(model, attr, None)
+        if v is not None:
+            v = np.asarray(v, dtype=float).ravel()
+            offset = v if offset is None else offset + v
+    return family, weighted, offset
+
+
+def _patch_glm_classes() -> None:
+    """Wrap ``fit`` of statsmodels ``GLM``, ``Logit`` and ``Poisson`` (if importable)."""
+    try:
+        import importlib.util
+
+        if importlib.util.find_spec("statsmodels") is None:
+            return
+        from statsmodels.discrete import discrete_model as dm  # type: ignore
+        from statsmodels.genmod import generalized_linear_model as glmm  # type: ignore
+    except Exception:
+        return
+    for cls in (glmm.GLM, dm.Logit, dm.Poisson):
+        key = f"__statsmodels_{cls.__name__}_fit__"
+        original = cls.fit
+        if hasattr(original, ORIGINAL_ATTR) or key in _originals:
+            continue
+
+        def make(original: Any) -> Any:
+            @functools.wraps(original)
+            def fit(self: Any, *args: Any, **kwargs: Any) -> Any:
+                if _busy():
+                    return original(self, *args, **kwargs)
+                _local.depth = getattr(_local, "depth", 0) + 1
+                try:
+                    res = original(self, *args, **kwargs)
+                finally:
+                    _local.depth -= 1
+                _local.depth += 1
+                try:
+                    global _counter
+                    site = _find_call_site(2)
+                    with _lock:
+                        idx = _counter
+                        _counter += 1
+                        sinks = list(_sinks)
+                    family, weighted, offset = _glm_info(self)
+                    inputs: dict[str, Any] = {"X": np.array(self.exog, dtype=float),
+                                              "y": np.array(self.endog, dtype=float)}
+                    if offset is not None:
+                        inputs["offset"] = offset
+                    rec = CallRecord(
+                        index=idx,
+                        func="statsmodels_glm",
+                        inputs=inputs,
+                        params={
+                            "exog_names": list(getattr(self, "exog_names", None) or []),
+                            "cov_type": _scalar_param(kwargs.get("cov_type", "nonrobust")),
+                            "family": family,
+                            "weighted": weighted,
+                        },
+                        result={
+                            "params": np.asarray(res.params, dtype=float).tolist(),
+                            "pvalues": np.asarray(res.pvalues, dtype=float).tolist(),
+                        },
+                        site=site,
+                    )
+                    for sink in sinks:
+                        sink(rec)
+                except Exception:
+                    log.exception("stataudit: failed to record a statsmodels GLM fit")
+                finally:
+                    _local.depth -= 1
+                return res
+
+            setattr(fit, ORIGINAL_ATTR, original)
+            return fit
+
+        _originals[key] = original
+        _originals[key + "own"] = "fit" in cls.__dict__  # type: ignore[assignment]
+        cls.fit = make(original)
+
+
+def _unpatch_glm_classes() -> None:
+    try:
+        from statsmodels.discrete import discrete_model as dm  # type: ignore
+        from statsmodels.genmod import generalized_linear_model as glmm  # type: ignore
+    except Exception:
+        return
+    for cls in (glmm.GLM, dm.Logit, dm.Poisson):
+        key = f"__statsmodels_{cls.__name__}_fit__"
+        original = _originals.pop(key, None)
+        own = _originals.pop(key + "own", True)
+        if original is None:
+            continue
+        if own:
+            cls.fit = original
+        else:
+            del cls.fit
+
+
 def install(statsmodels: bool = True) -> None:
     """Replace the traced ``scipy.stats`` functions with recording wrappers.
 
@@ -417,6 +533,7 @@ def install(statsmodels: bool = True) -> None:
             setattr(_stats, name, _make_wrapper(name, current))
         if statsmodels:
             _patch_statsmodels()
+            _patch_glm_classes()
 
 
 def uninstall() -> None:
@@ -433,6 +550,7 @@ def uninstall() -> None:
             if original is not None:
                 setattr(_stats, name, original)
         _unpatch_statsmodels()
+        _unpatch_glm_classes()
 
 
 def add_sink(sink: Callable[[CallRecord], None]) -> None:
