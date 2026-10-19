@@ -47,6 +47,7 @@ It doesn't matter whether a person or an AI assistant wrote the analysis. statau
 - [Verification toolkit](#part-of-a-verification-toolkit) · [How to cite](#how-to-cite)
 - [Contributing](#contributing) · [License](#license)
 
+<!-- --8<-- [start:why] -->
 ## Why audit an analysis?
 
 More and more statistics is done by asking an AI assistant. The code runs and a p-value comes out, but the conclusion can still be wrong, because the test's assumptions don't fit the data:
@@ -68,6 +69,9 @@ stataudit doesn't judge the code or the author. It asks the questions a reviewin
 
 A careful analysis gets ✅ and no alternatives at all. ⚠️ means **fragile**, not wrong.
 
+<!-- --8<-- [end:why] -->
+
+<!-- --8<-- [start:how] -->
 ## How it works
 
 <p align="center">
@@ -81,6 +85,9 @@ A careful analysis gets ✅ and no alternatives at all. ⚠️ means **fragile**
 
 Two more commands work without running anything: [`check-report`](#checking-reported-numbers-check-report) recomputes p-values from results reported in text, and [`lint`](#linting-without-running-lint) reads analysis code as a syntax tree.
 
+<!-- --8<-- [end:how] -->
+
+<!-- --8<-- [start:fine] -->
 ## Analyses that look fine
 
 Each bundled example is the kind of analysis an assistant writes when asked a simple question. Every verdict below is real output of `stataudit run examples/<file>`, and [`tests/test_examples.py`](https://github.com/bhaskargurram-ai/stataudit/blob/main/tests/test_examples.py) pins them.
@@ -127,6 +134,9 @@ stataudit report — examples/01_ttest_outliers.py
       rank_biserial = 0.311
 ```
 
+<!-- --8<-- [end:fine] -->
+
+<!-- --8<-- [start:quickstart] -->
 ## Quick start
 
 ### 1. Install
@@ -215,6 +225,9 @@ stataudit init            # add --agent to also set up the experimental fix agen
 
 `init` writes the caller workflows described under [GitHub integration](#github-integration) plus a commented `stataudit.toml`, detects how to install your analyses' dependencies (`requirements.txt`, else `pip install -e .`; override with `--install-command`), refuses to overwrite existing files unless you pass `--force`, and prints the next steps.
 
+<!-- --8<-- [end:quickstart] -->
+
+<!-- --8<-- [start:auditors] -->
 ## What each auditor checks
 
 | Test (`scipy.stats`) | Checks on the recorded data | Alternatives computed on the same data |
@@ -232,6 +245,9 @@ stataudit init            # add --agent to also set up the experimental fix agen
 
 Every statistical helper (HC3, Breusch-Pagan, Welch's ANOVA, Cook's distance, Holm, Monte Carlo chi-square) is written with numpy and scipy, and the test suite checks each one against an independent calculation: direct matrix formulas, brute-force leave-one-out refits, exact hypergeometric enumeration and hand-worked examples.
 
+<!-- --8<-- [end:auditors] -->
+
+<!-- --8<-- [start:verdicts] -->
 ## How verdicts work
 
 | Status | When |
@@ -242,6 +258,9 @@ Every statistical helper (HC3, Breusch-Pagan, Welch's ANOVA, Cook's distance, Ho
 
 "Recommended" alternatives are computed only when an assumption check fails: Welch's t-test runs only when the variances differ, so a clean analysis gets no alternatives at all. The overall status is the worst status among the tests, raised to fragile when the script tested the same data with three or more different tests.
 
+<!-- --8<-- [end:verdicts] -->
+
+<!-- --8<-- [start:checkreport] -->
 ## Checking reported numbers (`check-report`)
 
 Analyses end up as prose: a report, a README, a paper draft, an assistant's summary. `stataudit check-report` reads APA-style results from Markdown, plain text, reStructuredText, HTML, or PDF (when `pdftotext` is installed), recomputes each p-value with scipy from the reported statistic and degrees of freedom, and compares it with the reported one, in the spirit of [statcheck](https://github.com/MicheleNuijten/statcheck). Nothing is executed.
@@ -275,6 +294,9 @@ stataudit check-report — examples/reports/results.md
 
 Options: `--alpha`, `--fail-on inconsistent|gross|never` (default `inconsistent`), `--json`, `--md`, `--html`, `-v` to list consistent results too.
 
+<!-- --8<-- [end:checkreport] -->
+
+<!-- --8<-- [start:lint] -->
 ## Linting without running (`lint`)
 
 Some analysis code can't be run in CI: the data is private, too large or behind a VPN. `stataudit lint` reads `.py` and `.ipynb` files as a syntax tree, executes nothing and needs no data, so it is fast enough for every pull request. Rules SA1xx cover hypothesis testing; SA2xx cover train/test leakage in machine-learning evaluation, the most common reason published ML results fail to reproduce (Kapoor & Narayanan, *Patterns* 2023).
@@ -312,6 +334,9 @@ stataudit lint — examples/04_many_tests.py
 
 Suppress a finding with a comment on the reported line, `# stataudit: ignore` or `# stataudit: ignore[SA102, SA105]`; choose rules with `--select` / `--ignore`, or `lint_ignore` in `stataudit.toml`. `--list-rules` prints every rule with its fix, `--fail-on warn|info|never` (default `warn`) sets the exit code, and `--json` / `--md` write reports. Notebooks are linted as one program. Lint findings are heuristics about code, not facts about data: `stataudit run` is the stronger check whenever you can run the analysis. The rules are in the same family as stat-lint's (see [How stataudit compares](#how-stataudit-compares)) but much simpler: they match patterns within one file and do no dataflow analysis.
 
+<!-- --8<-- [end:lint] -->
+
+<!-- --8<-- [start:agent] -->
 ## Agent: fix and explain (experimental)
 
 Finding a fragile conclusion is half the job. The opt-in agent tries the other half, **proposing a corrected analysis**, and stataudit then checks the proposal the only way that counts: by running it. The agent is **off by default** and needs your own API key.
@@ -344,6 +369,9 @@ A verified fix means stataudit's audit of the new analysis is better and every o
 
 **Honest limits.** The agent is tested end to end with a scripted fake model; how often real models produce fixes that pass verification has **not been measured**. Problems that need a design decision (which tests form a family, whether an outlier is an error) can't be settled by rewriting code: example 04 is one. Token use is reported with every run. OpenAI's GPT-6 Luna only calls tools through Chat Completions with `STATAUDIT_LLM_REASONING_EFFORT=none`, and GPT-6 models reject `temperature` unless reasoning is off (stataudit sends none). Details are in [docs/AGENT.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/AGENT.md).
 
+<!-- --8<-- [end:agent] -->
+
+<!-- --8<-- [start:mcp] -->
 ## MCP server and web UI
 
 **MCP server.** `stataudit-mcp` (or `stataudit mcp`) is a Model Context Protocol server over stdio, so an assistant that writes an analysis can audit it before reporting a result:
@@ -367,6 +395,9 @@ The server treats its inputs as data: it accepts only known test names and numer
 
 **Web UI.** `stataudit ui` starts a local Flask app at `http://127.0.0.1:8765`: upload a CSV, pick a test and its columns, and read the HTML report. It binds to 127.0.0.1 by default and stores nothing.
 
+<!-- --8<-- [end:mcp] -->
+
+<!-- --8<-- [start:github] -->
 ## GitHub integration
 
 stataudit runs on pull requests as separate workflows, so that PR code and privileged tokens never share a job ([why](#security-model)). Each caller is a few lines pointing at a reusable workflow in this repository; `stataudit init` writes them for you, and [`examples/workflows/`](https://github.com/bhaskargurram-ai/stataudit/tree/main/examples/workflows) holds exactly what `stataudit init --agent` writes (a test keeps the two in sync). Pin `@v1.0.3`, or a full commit SHA if you want to be strict, and keep `stataudit-ref` the same.
@@ -491,6 +522,9 @@ When the check finds an analysis that is fragile or does not hold, the agent wor
 
 Because `workflow_run` workflows always run from the default branch, merge the workflow files there before the comment and agent workflows act on pull requests. A composite action (`uses: bhaskargurram-ai/stataudit@v1.0.3` with `command: ci | summary | comment | agent-propose | agent-verify`) is available for custom setups; see [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md#composite-action-actionyml).
 
+<!-- --8<-- [end:github] -->
+
+<!-- --8<-- [start:security] -->
 ## Security model
 
 Running PR code safely is the core problem. stataudit splits the work so that capabilities never meet in one job:
@@ -507,6 +541,9 @@ Running PR code safely is the core problem. stataudit splits the work so that ca
 
 stataudit raises the bar; it is **not** a sandbox. A malicious PR can still tamper with its own results inside the unprivileged job, and `stataudit run` on your laptop runs the script with your permissions, like `python analysis.py` would. Read [docs/SECURITY_MODEL.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/SECURITY_MODEL.md) for the full threat model.
 
+<!-- --8<-- [end:security] -->
+
+<!-- --8<-- [start:compares] -->
 ## How stataudit compares
 
 Different tools answer different questions. This is our best reading of each as of October 2026; corrections are welcome.
@@ -527,6 +564,9 @@ Different tools answer different questions. This is our best reading of each as 
 
 These tools are complementary. statcheck is the established tool for checking published articles and has been validated at scale (a validity study reported accuracy of roughly 96–99.9 % depending on settings); stataudit's `check-report` borrows the idea for analysis write-ups; it has not been validated on a corpus of articles, and it doesn't read tables. stat-lint's static analysis is more thorough than `stataudit lint`, which matches patterns in one file. pingouin and statsmodels give you every diagnostic stataudit uses and more, but you have to know which to call and what to conclude. LLM agents run analyses quickly, but nothing independent checks what they concluded. stataudit's own gaps: it sees only `scipy.stats` and statsmodels OLS calls (no R, no hand-computed tests, no mixed models), it cannot know your study design, and its agent is unbenchmarked.
 
+<!-- --8<-- [end:compares] -->
+
+<!-- --8<-- [start:configuration] -->
 ## Configuration
 
 `stataudit.toml` at the repository root (or `.stataudit.toml`, or `[tool.stataudit]` in `pyproject.toml`) configures `stataudit ci`. In CI it is read from the pull request's **base** commit, so a pull request cannot weaken its own check. Unknown keys are errors. This is what `stataudit init --agent` writes:
@@ -588,6 +628,9 @@ enabled = true
 
 Generic names such as `LLM_API_KEY` are deliberately not read.
 
+<!-- --8<-- [end:configuration] -->
+
+<!-- --8<-- [start:cli] -->
 ## CLI reference
 
 ```text
@@ -643,6 +686,9 @@ You can also run `python -m stataudit …`. Every option, the JSON formats and t
 
 </details>
 
+<!-- --8<-- [end:cli] -->
+
+<!-- --8<-- [start:faq] -->
 ## FAQ
 
 <details>
@@ -687,6 +733,9 @@ Only Python is traced today. `check-report` works on any text, whatever produced
 
 </details>
 
+<!-- --8<-- [end:faq] -->
+
+<!-- --8<-- [start:limitations] -->
 ## Limitations
 
 - stataudit audits **assumption violations and robustness** of the tests it sees. Independence, study design, the family of tests and pre-registration are questions only you can answer.
@@ -698,6 +747,9 @@ Only Python is traced today. `check-report` works on any text, whatever produced
 - `lint` is pattern-based and single-file; it misses problems that need dataflow across files and can flag code that is fine.
 - The agent is experimental and unbenchmarked. A verified fix passes stataudit's checks; it can still change the question being asked.
 
+<!-- --8<-- [end:limitations] -->
+
+<!-- --8<-- [start:roadmap] -->
 ## Roadmap
 
 - More tests: logistic and Poisson regression, mixed models, survival analysis (log-rank, Cox)
@@ -708,6 +760,9 @@ Only Python is traced today. `check-report` works on any text, whatever produced
 - Bootstrap confidence intervals for effect sizes
 - A published benchmark of the fix agent on analyses with known problems
 
+<!-- --8<-- [end:roadmap] -->
+
+<!-- --8<-- [start:toolkit] -->
 ## Part of a verification toolkit
 
 stataudit is one of three tools for checking whether scientific and ML computations are actually correct, including code written with AI assistance:
@@ -716,9 +771,14 @@ stataudit is one of three tools for checking whether scientific and ML computati
 - **stataudit** (`pip install stataudit`, this package): Does a statistical conclusion survive its own data, given test assumptions, alternatives and multiple comparisons?
 - **[proofcheck](https://github.com/bhaskargurram-ai/proofcheck)** (`pip install proofcheck-ai`): Does a code change do what it claims: fail-to-pass tests, reproducer replay, claim-to-evidence mapping?
 
+<!-- --8<-- [end:toolkit] -->
+
+<!-- --8<-- [start:cite] -->
 ## How to cite
 
 If you use stataudit in research, please cite it. The repository's [`CITATION.cff`](https://github.com/bhaskargurram-ai/stataudit/blob/main/CITATION.cff) has the metadata; GitHub's "Cite this repository" button turns it into APA or BibTeX.
+
+<!-- --8<-- [end:cite] -->
 
 ## Contributing
 
