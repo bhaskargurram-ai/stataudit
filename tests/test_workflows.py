@@ -204,7 +204,11 @@ class WorkflowSecurityTest(unittest.TestCase):
         pages = load(WF_DIR / "pages.yml")
         self.assertEqual(pages["jobs"]["deploy"]["if"], "github.event.repository.private == false")
         self.assertIn("workflow_dispatch", pages["on"])
-        self.assertEqual(pages["jobs"]["deploy"]["steps"][2]["with"]["path"], "docs/site")
+        steps = pages["jobs"]["deploy"]["steps"]
+        upload = next(st for st in steps if "upload-pages-artifact" in st.get("uses", ""))
+        self.assertEqual(upload["with"]["path"], "_site")  # the landing page plus the MkDocs site under docs/
+        build = next(st for st in steps if st.get("name") == "Build the documentation site")
+        self.assertIn("cp -r docs/site/. _site/", build["run"])
         ci = load(WF_DIR / "ci.yml")
         self.assertEqual(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"], ["3.10", "3.11", "3.12", "3.13"])
         self.assertIn("twine check", json.dumps(ci["jobs"]["package"]))
