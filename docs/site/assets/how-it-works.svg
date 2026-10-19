@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 440" width="1000" height="440" role="img" aria-labelledby="t d">
   <title id="t">How stataudit works</title>
-  <desc id="d">stataudit run executes a script or notebook in a subprocess and traces every scipy.stats and statsmodels OLS call with its data, options, p-value and line. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data: Welch, Yuen, Mann-Whitney, Spearman, HC3, refits without influential points, Fisher or Monte Carlo chi-square, and Holm. Fixed rules then give a verdict: holds, fragile or does not hold. Separately, stataudit lint and stataudit check-report run without executing anything. All results go to terminal, HTML, Markdown, JSON and PR comment reports.</desc>
+  <desc id="d">stataudit run executes a script or notebook in a subprocess and traces every scipy.stats call and statsmodels OLS, Poisson and logistic fit with its data, options, p-value and line. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data: Welch, Yuen, Mann-Whitney, Spearman, HC3, refits without influential points, Fisher or Monte Carlo chi-square, and Holm. Fixed rules then give a verdict: holds, fragile or does not hold. Separately, stataudit lint and stataudit check-report run without executing anything. All results go to terminal, HTML, Markdown, JSON and PR comment reports.</desc>
   <style>
     svg { --bg:#ffffff; --edge:#d5dae1; --ink:#1b1f24; --muted:#5b6470; --box:#f5f7f9; --arrow:#8a93a0;
           --accent:#3557c4; --accent-bg:#e9eefc; --ok:#1a7f37; --ok-bg:#e3f4e8; --warn:#9a6700; --warn-bg:#fff3d1;
@@ -59,7 +59,7 @@
   <text class="sub" x="220" y="130">Runs it in a subprocess</text>
   <text class="sub" x="220" y="149">with a timeout and</text>
   <text class="sub" x="220" y="168">records each scipy.stats</text>
-  <text class="sub" x="220" y="187">and statsmodels OLS</text>
+  <text class="sub" x="220" y="187">and statsmodels fits</text>
   <text class="sub" x="220" y="206">call: the data, options,</text>
   <text class="sub" x="220" y="225">p-value and line.</text>
   <rect class="box" x="402" y="52" width="172" height="206" rx="10"/>

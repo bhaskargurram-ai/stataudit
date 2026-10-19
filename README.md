@@ -25,7 +25,7 @@ It doesn't matter whether a person or an AI assistant wrote the analysis. statau
 </p>
 
 > [!NOTE]
-> **Status: beta.** Releases are numbered 1.x, but there are no confirmed outside users yet, so details may still change. stataudit traces 13 `scipy.stats` tests plus statsmodels OLS, in scripts and Jupyter notebooks. It also recomputes p-values reported in text (`check-report`), lints analysis code without running it (`lint`), and runs all three on pull requests. The agent (`fix`, `explain`) is **experimental and off by default**; it needs your own LLM API key, and nothing it writes counts until stataudit has run it. The full reference for every command, option and key is [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md).
+> **Status: beta.** Releases are numbered 1.x, but there are no confirmed outside users yet, so details may still change. stataudit traces 13 `scipy.stats` tests plus statsmodels OLS, Poisson and logistic regression, in scripts and Jupyter notebooks. It also recomputes p-values reported in text (`check-report`), lints analysis code without running it (`lint`), and runs all three on pull requests. The agent (`fix`, `explain`) is **experimental and off by default**; it needs your own LLM API key, and nothing it writes counts until stataudit has run it. The full reference for every command, option and key is [docs/REFERENCE.md](https://github.com/bhaskargurram-ai/stataudit/blob/main/docs/REFERENCE.md).
 
 ## Contents
 
@@ -75,10 +75,10 @@ A careful analysis gets ✅ and no alternatives at all. ⚠️ means **fragile**
 ## How it works
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/bhaskargurram-ai/stataudit/main/docs/assets/how-it-works.svg" alt="stataudit run executes a script or notebook in a subprocess and traces every scipy.stats and statsmodels OLS call. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data. Fixed rules then give a verdict: holds, fragile or does not hold. Separately, stataudit lint and stataudit check-report run without executing anything. Results go to terminal, HTML, Markdown, JSON and PR comment reports." width="880">
+  <img src="https://raw.githubusercontent.com/bhaskargurram-ai/stataudit/main/docs/assets/how-it-works.svg" alt="stataudit run executes a script or notebook in a subprocess and traces every scipy.stats call and statsmodels OLS, Poisson and logistic fit. Each call is audited for normality, outliers, unequal variances, leverage, sparse expected counts and the number of p-values. Only when a check fails are alternatives computed on the same data. Fixed rules then give a verdict: holds, fragile or does not hold. Separately, stataudit lint and stataudit check-report run without executing anything. Results go to terminal, HTML, Markdown, JSON and PR comment reports." width="880">
 </p>
 
-1. **Trace.** `stataudit run` executes your script or notebook in a subprocess with a timeout. Thin wrappers around `scipy.stats` (and statsmodels OLS, when installed) record each call's input arrays, options, result and call site (`analysis.py:25`, or `analysis.ipynb cell 4, line 2` in a notebook). Your code runs unchanged and gets the real return values.
+1. **Trace.** `stataudit run` executes your script or notebook in a subprocess with a timeout. Thin wrappers around `scipy.stats` (and statsmodels OLS, `GLM`, `Logit` and `Poisson`, when installed) record each call's input arrays, options, result and call site (`analysis.py:25`, or `analysis.ipynb cell 4, line 2` in a notebook). Your code runs unchanged and gets the real return values.
 2. **Audit.** Each recorded call goes to the auditor for that test, which checks the assumptions on the recorded data. Every finding carries its evidence: Shapiro-Wilk p and skew, robust z of each outlier, variance ratio and Levene p, Cook's distance, expected counts.
 3. **Alternatives.** Only when a check fails, stataudit computes the analyses that check calls for, on the same data: Welch's t when variances differ, Yuen's trimmed t and Mann-Whitney U with outliers, Spearman and a refit without high-leverage points for a correlation, HC3 standard errors for a regression, Fisher's exact or a Monte Carlo test for a sparse table, and Holm-Bonferroni across every p-value in the script.
 4. **Verdict.** Fixed rules compare the conclusions at α: ✅ **holds**, ⚠️ **fragile** or ❌ **does not hold**, with one plain-English sentence per test. No LLM is involved.
@@ -150,7 +150,7 @@ pip install "stataudit[web]"          # + Flask for the local web UI
 pip install "stataudit[mcp]"          # + the MCP server
 ```
 
-The core needs only numpy, scipy, pandas, click and jinja2 on Python 3.10 or newer. statsmodels is optional: when it is installed, its OLS fits are traced too. The agent's LLM client uses the standard library, so it adds no dependencies.
+The core needs only numpy, scipy, pandas, click and jinja2 on Python 3.10 or newer. statsmodels is optional: when it is installed, its OLS, Poisson and logistic fits are traced too (stataudit refits them with numpy, so the audit doesn't depend on statsmodels). The agent's LLM client uses the standard library, so it adds no dependencies.
 
 ### 2. Audit a script or a notebook
 
@@ -237,6 +237,7 @@ stataudit init            # add --agent to also set up the experimental fix agen
 | `ttest_1samp` | normality and outliers | Wilcoxon signed-rank against `popmean` |
 | `pearsonr` | outliers, normality, leverage and Cook's distance (> 4/n), deleting high-leverage points as a group, whether dropping any one point flips significance | Spearman; Pearson without the high-leverage points; Pearson without the most influential point |
 | `linregress`, `stataudit.audit_ols`, statsmodels OLS | residual normality, Breusch-Pagan (Koenker), Cook's distance and leverage, leave-one-out | HC3 robust SE and p-value for each slope; refit without high-influence points |
+| statsmodels `GLM` (Poisson with log link, binomial with logit link), `Logit`, `Poisson`; `stataudit.audit_glm` | Poisson: overdispersion (Pearson chi-square / df > 1.5). Logistic: events per predictor (< 10) and (quasi-)complete separation, where Wald p-values break down. Both: whether dropping any one point flips significance (n ≤ 300) | quasi-Poisson SE (overdispersion), likelihood-ratio test (separation, few events), HC0 robust SE; rate or odds ratios |
 | `f_oneway` | per-group normality and outliers, Levene | Welch's ANOVA, Kruskal-Wallis |
 | `chi2_contingency` | Cochran's rule (any expected count < 1, or > 20 % of cells < 5), non-integer "counts", Yates note | Fisher's exact (2×2) or a Monte Carlo permutation p-value with fixed margins and a fixed seed (r×c) |
 | `fisher_exact`, `mannwhitneyu`, `wilcoxon`, `kruskal`, `spearmanr`, `shapiro` | notes: ties, zero differences, very small n, smallest attainable p, normality pre-testing | none |
@@ -560,9 +561,9 @@ Different tools answer different questions. This is our best reading of each as 
 | Multiple comparisons | No | Flags missing correction | Provides corrections | Varies | Holm across every traced p-value |
 | Uses an LLM | No | No | No | Yes, and it decides | Optional, and it never decides |
 | CI / pull requests | Not built in | Research prototype | n/a | Hosted chat | GitHub workflows and a PR comment |
-| Language | R (statcheck); text in any field | Python | Python | Mostly Python | Python: `scipy.stats`, statsmodels OLS |
+| Language | R (statcheck); text in any field | Python | Python | Mostly Python | Python: `scipy.stats`, statsmodels OLS and Poisson/logistic GLMs |
 
-These tools are complementary. statcheck is the established tool for checking published articles and has been validated at scale (a validity study reported accuracy of roughly 96–99.9 % depending on settings); stataudit's `check-report` borrows the idea for analysis write-ups; it has not been validated on a corpus of articles, and it doesn't read tables. stat-lint's static analysis is more thorough than `stataudit lint`, which matches patterns in one file. pingouin and statsmodels give you every diagnostic stataudit uses and more, but you have to know which to call and what to conclude. LLM agents run analyses quickly, but nothing independent checks what they concluded. stataudit's own gaps: it sees only `scipy.stats` and statsmodels OLS calls (no R, no hand-computed tests, no mixed models), it cannot know your study design, and its agent is unbenchmarked.
+These tools are complementary. statcheck is the established tool for checking published articles and has been validated at scale (a validity study reported accuracy of roughly 96–99.9 % depending on settings); stataudit's `check-report` borrows the idea for analysis write-ups; it has not been validated on a corpus of articles, and it doesn't read tables. stat-lint's static analysis is more thorough than `stataudit lint`, which matches patterns in one file. pingouin and statsmodels give you every diagnostic stataudit uses and more, but you have to know which to call and what to conclude. LLM agents run analyses quickly, but nothing independent checks what they concluded. stataudit's own gaps: it sees only `scipy.stats` calls and statsmodels OLS, Poisson and logistic fits (no R, no hand-computed tests, no mixed models, no other GLM families), it cannot know your study design, and its agent is unbenchmarked.
 
 <!-- --8<-- [end:compares] -->
 
@@ -739,7 +740,7 @@ Only Python is traced today. `check-report` works on any text, whatever produced
 ## Limitations
 
 - stataudit audits **assumption violations and robustness** of the tests it sees. Independence, study design, the family of tests and pre-registration are questions only you can answer.
-- Only calls through `scipy.stats` (plus statsmodels OLS, when installed) are traced. Tests computed by hand, in R, or through other libraries are invisible to it.
+- Only calls through `scipy.stats` (plus statsmodels OLS, Poisson and logistic regression, when installed) are traced. Tests computed by hand, in R, or through other libraries are invisible to it.
 - Assumption checks have little power at small n and too much at very large n. stataudit reports evidence (skewness, variance ratios, Cook's distance) next to p-values for that reason.
 - Holm-Bonferroni treats every traced p-value as one family. If your design says otherwise, read the multiplicity section with that in mind.
 - Multi-dimensional calls (`axis=1` on 2-D arrays) are recorded but not audited.
